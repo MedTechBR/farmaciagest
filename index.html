@@ -283,6 +283,82 @@ function openModal(title,icon,bodyHTML,footerHTML){
 }
 function closeModal(){ $('#modalRoot').innerHTML=''; }
 
+/* ================= banco de dados de teste =================
+   Cria uma farmácia fictícia completa para experimentar o app.
+   Tudo que nasce aqui leva demo:true e sai junto no "Remover dados de teste";
+   os registros reais nunca são tocados. */
+function dPlus(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+// se a categoria/turno padrão tiver sido renomeada ou apagada, cai na que existir
+function demoCat(pref,i){ const c=CATS.find(c=>c.id===pref)||CATS[i%(CATS.length||1)]; return c?c.id:pref; }
+function demoTurno(pref,i){ const t=turnoOf(pref)||TURNOS[i%(TURNOS.length||1)]; return t||{id:pref,ini:'07:00',fim:'13:00'}; }
+
+const DEMO_PESSOAS=[
+  // nome, categoria, turno, folgas (0=dom), horaExtra, folgaFeriado, saldo inicial
+  ['Ana Beatriz Ramos',   'balconista','manha',[0],   false,true ,  0],
+  ['Carla Mendonça',      'balconista','manha',[3],   true ,false,  2.5],
+  ['Diego Ferraz',        'entregador','manha',[1],   false,false, -1.5],
+  ['Elaine Souza',        'caixa',     'manha',[2],   false,true ,  0],
+  ['Fábio Nogueira',      'balconista','tarde',[0],   true ,false,  4],
+  ['Gisele Prado',        'balconista','tarde',[4],   false,false,  0],
+  ['Henrique Lima',       'entregador','tarde',[3],   true ,false, -3],
+  ['Isabela Cunha',       'caixa',     'tarde',[1],   false,true ,  1],
+  ['João Vitor Alves',    'balconista','noite',[5],   true ,false,  0],
+  ['Karina Boaventura',   'entregador','noite',[2],   false,false,  6.5],
+  ['Lucas Tavares',       'caixa',     'noite',[6],   true ,true ,  0],
+  ['Marina Coelho',       'balconista','noite',[0,6], false,false, -2],
+];
+const DEMO_LANC=[
+  // índice da pessoa, dias atrás, horas, motivo
+  [1, 18,  3,   'Cobriu o fechamento na falta da colega'],
+  [2, 15, -4,   'Saiu mais cedo (consulta médica)'],
+  [4, 12,  2.5, 'Inventário do estoque'],
+  [6, 10, -3,   'Chegou atrasado — trânsito'],
+  [8,  8,  4,   'Plantão de feriado'],
+  [9,  6,  1.5, 'Entrega extra fim de tarde'],
+  [10, 4, -2,   'Folga compensada'],
+  [3,  2,  2,   'Ficou até o fim do balanço do caixa'],
+];
+const DEMO_FERIADOS=[
+  ['01-01','Confraternização Universal'],['04-21','Tiradentes'],['05-01','Dia do Trabalho'],
+  ['09-07','Independência do Brasil'],['10-12','Nossa Senhora Aparecida'],['11-02','Finados'],
+  ['11-15','Proclamação da República'],['11-20','Consciência Negra'],['12-25','Natal'],
+];
+function demoCount(){
+  return {
+    funcs:  FUNCS.filter(f=>f.demo).length,
+    trocas: TROCAS.filter(t=>t.demo).length,
+    banco:  BANCO.filter(b=>b.demo).length,
+    ferias: FERIAS.filter(h=>h.demo).length,
+  };
+}
+function temDemo(){ const d=demoCount(); return d.funcs+d.trocas+d.banco+d.ferias>0; }
+function removeDemo(){
+  FUNCS=FUNCS.filter(f=>!f.demo); TROCAS=TROCAS.filter(t=>!t.demo);
+  BANCO=BANCO.filter(b=>!b.demo); FERIAS=FERIAS.filter(h=>!h.demo);
+}
+function seedDemo(){
+  const novos=DEMO_PESSOAS.map((p,i)=>{
+    const t=demoTurno(p[2],i);
+    return {id:uid(),nome:p[0],catId:demoCat(p[1],i),turnoId:t.id,entrada:t.ini,saida:t.fim,
+            folgas:p[3].slice(),horaExtra:p[4],folgaFeriado:p[5],saldoInicial:p[6],demo:true};
+  });
+  FUNCS=FUNCS.concat(novos);
+  // banco de horas
+  DEMO_LANC.forEach(l=>{ const f=novos[l[0]]; if(!f)return;
+    BANCO.push({id:uid(),funcId:f.id,data:dPlus(-l[1]),horas:l[2],motivo:l[3],demo:true}); });
+  // trocas (uma já passada, duas nos próximos dias)
+  const tr=[[0,4,[dPlus(-3)],'Troca de turno combinada na semana passada'],
+            [2,6,[dPlus(2)],'Diego assume a tarde; Henrique cobre a manhã'],
+            [8,11,[dPlus(4),dPlus(5)],'Fim de semana trocado entre os dois']];
+  tr.forEach(t=>{ const a=novos[t[0]],b=novos[t[1]]; if(!a||!b)return;
+    TROCAS.push({id:uid(),aId:a.id,bId:b.id,datas:t[2].slice(),obs:t[3],demo:true}); });
+  // próximos 4 feriados nacionais de data fixa
+  const hoje=todayStr(), ano=+hoje.slice(0,4);
+  DEMO_FERIADOS.map(h=>{ const d=ano+'-'+h[0]; return {data:d<hoje?((ano+1)+'-'+h[0]):d,nome:h[1]}; })
+    .sort((a,b)=>a.data.localeCompare(b.data)).slice(0,4)
+    .forEach(h=>{ if(!FERIAS.some(x=>x.data===h.data)) FERIAS.push({data:h.data,nome:h.nome,demo:true}); });
+}
+
 /* ============================================================
    ABA: FUNCIONÁRIOS
    ============================================================ */
@@ -338,7 +414,7 @@ function renderFunc(){
 }
 function empCard(f){
   return '<button class="emp" data-id="'+f.id+'"><div class="av">'+esc(initials(f.nome))+'</div>'
-    +'<div class="nm"><b>'+esc(f.nome)+'</b><span>'+esc(catName(f.catId))+' · '+esc(turnoName(f.turnoId))+'</span></div></button>';
+    +'<div class="nm"><b>'+esc(f.nome)+(f.demo?' <span class="tag gray" style="font-size:9.5px;padding:1px 6px;vertical-align:middle">teste</span>':'')+'</b><span>'+esc(catName(f.catId))+' · '+esc(turnoName(f.turnoId))+'</span></div></button>';
 }
 
 function folgasLabel(folgas){
@@ -809,6 +885,14 @@ function renderConfig(){
   html+='</div>';
 
   // backup
+  const dc=demoCount(), temD=temDemo();
+  html+='<div class="card"><h2><i class="ti ti-flask"></i> Banco de dados de teste</h2>'
+    +'<p class="hint">Cria uma farmácia fictícia completa — 12 funcionários nos 3 turnos, folgas, trocas, lançamentos de banco de horas e os próximos feriados — para você experimentar o app com a tela cheia. Tudo que nasce aqui fica marcado como <span class="tag gray">teste</span> e sai de uma vez só; seus dados reais não são tocados.</p>'
+    +'<div class="row-actions" style="margin-top:0"><button class="btn btn-primary btn-sm" id="demoSeed"><i class="ti ti-database-plus"></i> '+(temD?'Recriar banco de teste':'Criar banco de teste')+'</button>'
+    +(temD?'<button class="btn btn-danger btn-sm" id="demoClear"><i class="ti ti-database-off"></i> Remover dados de teste</button>':'')+'</div>'
+    +(temD?('<p class="hint" style="margin:14px 0 0">No app agora: <b>'+dc.funcs+'</b> funcionário(s), <b>'+dc.trocas+'</b> troca(s), <b>'+dc.banco+'</b> lançamento(s) e <b>'+dc.ferias+'</b> feriado(s) de teste.</p>'):'')
+    +'</div>';
+
   html+='<div class="card"><h2><i class="ti ti-database"></i> Backup dos dados</h2><p class="hint">Exporte tudo para um arquivo (guarde como cópia de segurança) ou restaure de um arquivo salvo.</p>'
     +'<div class="row-actions" style="margin-top:0"><button class="btn btn-ghost btn-sm" id="bkExport"><i class="ti ti-download"></i> Exportar dados</button>'
     +'<button class="btn btn-ghost btn-sm" id="bkImport"><i class="ti ti-upload"></i> Importar dados</button>'
@@ -829,6 +913,22 @@ function renderConfig(){
 
   $('#ferAdd').onclick=()=>{ const d=$('#ferData').value; if(!d){toast('Escolha a data','err');return;} if(FERIAS.some(h=>h.data===d)){toast('Data já cadastrada','err');return;} FERIAS.push({data:d,nome:$('#ferNome').value.trim()||'Feriado'}); saveAll(); renderConfig(); };
   $$('.ferDel').forEach(b=>b.onclick=()=>{ FERIAS=FERIAS.filter(h=>h.data!==b.dataset.d); saveAll(); renderConfig(); });
+
+  $('#demoSeed').onclick=()=>{
+    const reais=FUNCS.filter(f=>!f.demo).length;
+    if(temDemo()){
+      if(!confirm('Já existe um banco de teste. Recriar do zero?\n\nOs dados de TESTE atuais são substituídos. Os seus dados reais não são tocados.'))return;
+    }else if(reais){
+      if(!confirm('Você já tem '+reais+' funcionário(s) cadastrado(s).\n\nO banco de teste ACRESCENTA 12 funcionários fictícios (marcados como "teste"), sem apagar nada do que é seu. Continuar?'))return;
+    }
+    removeDemo(); seedDemo(); saveAll(); renderConfig();
+    toast('Banco de teste criado — veja a aba Escala diária','ok');
+  };
+  if($('#demoClear'))$('#demoClear').onclick=()=>{
+    const d=demoCount();
+    if(!confirm('Remover os dados de teste ('+d.funcs+' funcionário(s), '+d.trocas+' troca(s), '+d.banco+' lançamento(s), '+d.ferias+' feriado(s))?\n\nSeus dados reais permanecem.'))return;
+    removeDemo(); saveAll(); renderConfig(); toast('Dados de teste removidos');
+  };
 
   $('#bkExport').onclick=()=>{
     const data={v:1,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS};
