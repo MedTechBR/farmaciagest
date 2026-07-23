@@ -1308,6 +1308,8 @@ function itensDoXML(txt){
 const LINHA_LIXO=/^(cnpj|cpf|inscri|i\.?e\.?\b|endere|rua |av\.|avenida|bairro|cep\b|munic|fone|telefone|e-?mail|data\b|emiss|sa[íi]da|total|subtotal|valor|desconto|acr[ée]scimo|frete|seguro|icms|ipi|pis|cofins|base de c|nota fiscal|nf-?e\b|danfe|chave de acesso|protocolo|natureza|destinat|remetente|transportador|placa|peso|volume|observa|informa|vendedor|comprador|cliente|pedido|or[çc]amento|p[áa]gina|pag\b|folha|www\.|http|dados do|recebemos|assinatura|raz[ãa]o social|razao social|filial|dep[óo]sito|condi[çc][ãa]o de pag|forma de pag|banco|duplicata|vencimento)/i;
 // marcadores que denunciam linha de cabeçalho de tabela em qualquer posição
 const CABECALHO=/(c[óo]d(igo)?\b.*descri|descri[çc][ãa]o.*(qtd|quant|un\b|valor)|item\b.*c[óo]d|qtd.*vl\b|quant.*valor unit)/i;
+// razão social solta (o cabeçalho do documento costuma virar "produto" na leitura)
+const EMPRESA=/(distribuidor|ltda|eireli|epp\b|s\/?a\b|com[ée]rcio|comercial|farmac[êe]utic|atacad|logistic)/i;
 const UNIDADES='UN|UND|UNID|CX|CAIXA|FR|FRASCO|CT|CP|PC|PCT|AMP|KIT|DZ|TB|BL|GALAO|SC';
 const DOSAGEM=/\d+\s*(mg|mcg|ml|l\b|g\b|ui\b|%)/i;
 const FARMA=/\b(c\/\s*\d+|cpr|comp\b|caps|capsula|drg|amp\b|fr\b|susp|xarope|pomada|creme|gel\b|sol\b|inj|gts|spray|adesivo)\b/i;
@@ -1317,6 +1319,7 @@ function analisaLinha(bruta){
   const l=String(bruta||'').trim();
   if(l.length<5)return null;
   if(LINHA_LIXO.test(l)||CABECALHO.test(l))return null;
+  if(EMPRESA.test(l)&&!DOSAGEM.test(l))return null;   // "PANPHARMA DISTRIBUIDORA" não é produto
   if(!/[A-Za-zÀ-ÿ]{3,}/.test(l))return null;
 
   let s=l;
