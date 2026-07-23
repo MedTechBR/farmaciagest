@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#059669">
+<title>FarmáciaGest — Gestão de escala da farmácia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --brand:#059669;--brand-dark:#047857;--brand-soft:#ecfdf5;--brand-line:#a7f3d0;
+  --ink:#0f172a;--bg:#f3f7f5;--line:#e6ecea;--line-strong:#d5ded9;--muted:#64748b;
+  --surface:#fff;--ok:#16a34a;--warn:#b45309;--warn-soft:#fef3c7;--danger:#dc2626;--danger-soft:#fef2f2;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 6px 18px rgba(15,23,42,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink);background:var(--bg);letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
+header.top{background:var(--brand);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:30}
+.logo{display:flex;align-items:center;gap:11px;font-weight:800;font-size:19px;letter-spacing:-.4px}
+.logo .mark{width:36px;height:36px;border-radius:10px;background:#fff;color:var(--brand);display:grid;place-items:center;font-size:22px;flex:0 0 auto}
+.logo small{display:block;font-weight:500;font-size:11.5px;color:#d1fae5;letter-spacing:0}
+nav.tabs{background:var(--brand-dark);display:flex;gap:2px;padding:0 12px;overflow-x:auto}
+nav.tabs button{background:none;border:none;color:#d1fae5;font-family:inherit;font-weight:600;font-size:13.5px;padding:12px 14px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px}
+nav.tabs button.active{color:#fff;border-bottom-color:#fff}
+nav.tabs button:hover{color:#fff}
+.wrap{max-width:1080px;margin:0 auto;padding:22px 20px 90px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:20px;margin-bottom:18px}
+.card h2{margin:0 0 4px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card h2 .ti{color:var(--brand);font-size:20px}
+.card .hint{color:var(--muted);font-size:13px;margin:0 0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label.f{display:block;font-weight:600;font-size:12.5px;margin-bottom:5px;color:var(--ink)}
+.f-wrap{display:flex;flex-direction:column}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line-strong);border-radius:9px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(5,150,105,.14)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:10px;padding:11px 16px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;text-decoration:none;min-height:44px}
+.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:var(--brand-dark)}
+.btn-primary:disabled{background:#9fd8c3;cursor:not-allowed}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line-strong)}.btn-ghost:hover{background:var(--bg)}
+.btn-danger{background:#fff;color:var(--danger);border:1px solid #f3c9c9}.btn-danger:hover{background:var(--danger-soft)}
+.btn-sm{padding:8px 12px;font-size:13px;min-height:38px;border-radius:9px}
+.row-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.drop{border:2px dashed var(--line-strong);border-radius:12px;padding:22px;text-align:center;cursor:pointer;transition:.15s;background:#fbfefc}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--brand-soft)}
+.drop .ti{font-size:30px;color:var(--brand)}
+.drop p{margin:8px 0 2px;font-weight:600;font-size:14px}
+.drop small{color:var(--muted);font-size:12.5px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--brand-soft);color:var(--brand-dark);border:1px solid var(--brand-line)}
+.tag.gray{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+.tag.balconista{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+.tag.entregador{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+.tag.caixa{background:#faf5ff;color:#7e22ce;border-color:#e9d5ff}
+.tag.folga{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.tag.troca{background:#fefce8;color:#a16207;border-color:#fde68a}
+.tag.extra{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
+tr:last-child td{border-bottom:none}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px}
+.muted{color:var(--muted)}
+.empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:14px}
+.empty .ti{font-size:34px;display:block;margin-bottom:8px;color:#cbd5e1}
+/* employee list */
+.emp-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.emp{display:flex;align-items:center;gap:11px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:pointer;transition:.12s;text-align:left}
+.emp:hover{border-color:var(--brand);background:var(--brand-soft)}
+.emp .av{width:38px;height:38px;border-radius:10px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;flex:0 0 auto}
+.emp .nm{flex:1;min-width:0}
+.emp .nm b{display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.emp .nm span{font-size:12px;color:var(--muted)}
+/* shift/day cards */
+.shift{border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.shift .head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--brand-soft);border-bottom:1px solid var(--brand-line)}
+.shift .head b{font-size:14.5px}
+.shift .head .time{font-size:12px;color:var(--brand-dark);font-weight:600}
+.shift .body{padding:6px 14px}
+.line{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.line:last-child{border-bottom:none}
+.line .nm{flex:1;font-weight:600;font-size:14px}
+.line .hr{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:11px;margin-bottom:10px;font-size:13.5px;line-height:1.45}
+.alert .ti{font-size:20px;flex:0 0 auto;margin-top:1px}
+.alert.danger{background:var(--danger-soft);border:1px solid #fecaca;color:#991b1b}
+.alert.ok{background:var(--brand-soft);border:1px solid var(--brand-line);color:var(--brand-dark)}
+.alert.warn{background:var(--warn-soft);border:1px solid #fde68a;color:#92400e}
+.alert.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.daybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:8px}
+.dow .d{border:1px solid var(--line);border-radius:8px;padding:7px 4px;text-align:center;font-size:11.5px}
+.dow .d b{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
+.dow .d.work{background:var(--brand-soft);border-color:var(--brand-line)}
+.dow .d.off{background:var(--danger-soft);border-color:#fecaca;color:#b91c1c}
+.saldo{font-size:26px;font-weight:800}
+.saldo.pos{color:var(--ok)}.saldo.neg{color:var(--danger)}.saldo.zero{color:var(--muted)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted);font-weight:600}
+.kv .v{font-weight:700;text-align:right}
+/* modal */
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:flex-start;justify-content:center;padding:28px 14px;z-index:60;overflow-y:auto}
+.modal{background:#fff;border-radius:16px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto}
+.modal .mh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal .mh h3{margin:0;font-size:17px;display:flex;align-items:center;gap:8px}
+.modal .mh h3 .ti{color:var(--brand)}
+.modal .mh .x{background:none;border:none;font-size:24px;color:var(--muted);cursor:pointer;line-height:1}
+.modal .mb{padding:20px}
+.modal .mf{display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.days-pick{display:flex;flex-wrap:wrap;gap:6px}
+.days-pick label{display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--line-strong);border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+.days-pick input{width:auto}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:13.5px}
+.switch input{width:auto}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:11px;font-size:14px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:90;max-width:90%}
+.toast.ok{background:var(--brand-dark)}.toast.err{background:var(--danger)}
+.mini-tbl th,.mini-tbl td{padding:7px 8px;font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.two{grid-template-columns:1fr}}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:9px;overflow:hidden}
+.seg button{background:#fff;border:none;padding:8px 12px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;color:var(--muted)}
+.seg button.active{background:var(--brand);color:#fff}
+.pos-num{color:var(--ok);font-weight:700}.neg-num{color:var(--danger);font-weight:700}
+.footer{color:var(--muted);font-size:12px;text-align:center;padding:10px 0 0}
+.inline-add{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.inline-add .f-wrap{flex:1;min-width:150px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="logo">
+    <div class="mark"><i class="ti ti-plus"></i></div>
+    <div>FarmáciaGest<small>Gestão de escala, trocas e banco de horas</small></div>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button data-tab="func" class="active"><i class="ti ti-users"></i> Funcionários</button>
+  <button data-tab="dia"><i class="ti ti-calendar-week"></i> Escala diária</button>
+  <button data-tab="trocas"><i class="ti ti-arrows-exchange"></i> Trocas</button>
+  <button data-tab="banco"><i class="ti ti-clock-hour-4"></i> Banco de horas</button>
+  <button data-tab="config"><i class="ti ti-settings"></i> Configurações</button>
+</nav>
+<div class="wrap">
+  <section id="tab-func"></section>
+  <section id="tab-dia" style="display:none"></section>
+  <section id="tab-trocas" style="display:none"></section>
+  <section id="tab-banco" style="display:none"></section>
+  <section id="tab-config" style="display:none"></section>
+  <div class="footer">FarmáciaGest • os dados ficam salvos apenas neste navegador (localStorage). Use “Backup” nas Configurações para exportar.</div>
+</div>
+<div id="modalRoot"></div>
+
+<script>
+/* ================= util ================= */
+const $=(s,r)=>(r||document).querySelector(s);
+const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
+function uid(){return 'id'+Math.random().toString(36).slice(2,9)+(seq++);}
+let seq=0;
+function loadLS(k,f){try{const v=JSON.parse(localStorage.getItem(k));return v==null?f:v;}catch(e){return f;}}
+function saveLS(k,o){try{localStorage.setItem(k,JSON.stringify(o));}catch(e){}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function norm(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2800);}
+function initials(nm){const p=String(nm||'?').trim().split(/\s+/);return ((p[0]||'?')[0]+(p.length>1?p[p.length-1][0]:'')).toUpperCase();}
+
+const DOW=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const DOW_S=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+function pad2(n){return String(n).padStart(2,'0');}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function parseDate(s){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s||'');if(!m)return null;return new Date(+m[1],+m[2]-1,+m[3]);}
+function weekdayOf(s){const d=parseDate(s);return d?d.getDay():null;}
+function fmtDateBR(s){const d=parseDate(s);if(!d)return s;return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear();}
+function fmtDateLong(s){const d=parseDate(s);if(!d)return s;return DOW[d.getDay()]+', '+pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear();}
+
+/* ================= state ================= */
+let FUNCS  = loadLS('fg_funcs',   []);
+let TROCAS = loadLS('fg_trocas',  []);
+let BANCO  = loadLS('fg_banco',   []);
+let FERIAS = loadLS('fg_feriados',[]);
+let TURNOS = loadLS('fg_turnos', [
+  {id:'manha',nome:'Manhã',ini:'07:00',fim:'13:00'},
+  {id:'tarde',nome:'Tarde',ini:'13:00',fim:'19:00'},
+  {id:'noite',nome:'Noite',ini:'19:00',fim:'22:00'},
+]);
+let CATS = loadLS('fg_cats', [
+  {id:'balconista',nome:'Balconista'},
+  {id:'entregador',nome:'Entregador'},
+  {id:'caixa',nome:'Operador de Caixa'},
+]);
+let MINIMOS = loadLS('fg_minimos', {}); // MINIMOS[turnoId][catId] = n
+function ensureMinimos(){
+  TURNOS.forEach(t=>{ if(!MINIMOS[t.id])MINIMOS[t.id]={}; CATS.forEach(c=>{ if(MINIMOS[t.id][c.id]==null)MINIMOS[t.id][c.id]=1; }); });
+}
+ensureMinimos();
+function saveAll(){
+  saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
+  saveLS('fg_feriados',FERIAS);saveLS('fg_turnos',TURNOS);saveLS('fg_cats',CATS);saveLS('fg_minimos',MINIMOS);
+}
+const catName=id=>{const c=CATS.find(c=>c.id===id);return c?c.nome:'Sem categoria';};
+const turnoOf=id=>TURNOS.find(t=>t.id===id)||null;
+const turnoName=id=>{const t=turnoOf(id);return t?t.nome:'—';};
+const funcById=id=>FUNCS.find(f=>f.id===id)||null;
+function catClass(id){ if(id==='balconista'||id==='entregador'||id==='caixa')return id; return 'gray'; }
+
+/* ================= banco de horas ================= */
+function saldoFunc(fid){
+  const f=funcById(fid); let s=(f&&+f.saldoInicial)||0;
+  BANCO.filter(b=>b.funcId===fid).forEach(b=>{s+=(+b.horas||0);});
+  return Math.round(s*100)/100;
+}
+function fmtH(n){ const v=Math.round((+n||0)*100)/100; return (v>0?'+':'')+v+'h'; }
+
+/* ================= escala do dia ================= */
+// retorna {status:'trabalha'|'folga', turnoId, entrada, saida, motivo, trocaCom, trocaObs}
+function baseSchedule(f,dateStr){
+  const wd=weekdayOf(dateStr);
+  const isHol=FERIAS.some(h=>h.data===dateStr);
+  const folgas=f.folgas||[];
+  if(folgas.includes(wd)) return {status:'folga',motivo:'Folga semanal',turnoId:f.turnoId,entrada:f.entrada,saida:f.saida};
+  if(isHol && f.folgaFeriado) return {status:'folga',motivo:'Folga de feriado',turnoId:f.turnoId,entrada:f.entrada,saida:f.saida};
+  return {status:'trabalha',turnoId:f.turnoId,entrada:f.entrada,saida:f.saida};
+}
+function daySchedule(dateStr){
+  const map={};
+  FUNCS.forEach(f=>{ map[f.id]=baseSchedule(f,dateStr); });
+  // aplicar trocas (troca de horário/escala entre A e B naquele dia)
+  TROCAS.filter(t=>(t.datas||[]).includes(dateStr)).forEach(t=>{
+    const a=map[t.aId], b=map[t.bId];
+    if(!a||!b)return;
+    const na={status:b.status,turnoId:b.turnoId,entrada:b.entrada,saida:b.saida,motivo:b.motivo,trocaCom:t.bId,trocaObs:t.obs};
+    const nb={status:a.status,turnoId:a.turnoId,entrada:a.entrada,saida:a.saida,motivo:a.motivo,trocaCom:t.aId,trocaObs:t.obs};
+    map[t.aId]=na; map[t.bId]=nb;
+  });
+  return map;
+}
+// alertas de mínimo por turno/categoria
+function shortages(dateStr){
+  const map=daySchedule(dateStr);
+  const count={}; // count[turnoId][catId]
+  TURNOS.forEach(t=>count[t.id]={});
+  FUNCS.forEach(f=>{
+    const s=map[f.id];
+    if(s.status!=='trabalha')return;
+    const tid=s.turnoId; if(!count[tid])count[tid]={};
+    count[tid][f.catId]=(count[tid][f.catId]||0)+1;
+  });
+  const out=[];
+  TURNOS.forEach(t=>CATS.forEach(c=>{
+    const min=(MINIMOS[t.id]&&MINIMOS[t.id][c.id])||0;
+    const have=(count[t.id]&&count[t.id][c.id])||0;
+    if(min>0 && have<min) out.push({turno:t.nome,cat:c.nome,have,min,falta:min-have});
+  }));
+  return {out,count};
+}
+
+/* ================= navegação ================= */
+let activeTab='func';
+$$('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  activeTab=b.dataset.tab;
+  $$('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  ['func','dia','trocas','banco','config'].forEach(t=>{ $('#tab-'+t).style.display = t===activeTab?'':'none'; });
+  render();
+}));
+function render(){
+  if(activeTab==='func')renderFunc();
+  else if(activeTab==='dia')renderDia();
+  else if(activeTab==='trocas')renderTrocas();
+  else if(activeTab==='banco')renderBanco();
+  else if(activeTab==='config')renderConfig();
+}
+
+/* ================= modal ================= */
+function openModal(title,icon,bodyHTML,footerHTML){
+  const root=$('#modalRoot');
+  root.innerHTML='<div class="backdrop" id="bk"><div class="modal"><div class="mh"><h3><i class="ti '+icon+'"></i> '+esc(title)+'</h3><button class="x" id="mx">&times;</button></div><div class="mb">'+bodyHTML+'</div>'+(footerHTML?('<div class="mf">'+footerHTML+'</div>'):'')+'</div></div>';
+  $('#mx').onclick=closeModal;
+  $('#bk').onclick=e=>{ if(e.target.id==='bk')closeModal(); };
+}
+function closeModal(){ $('#modalRoot').innerHTML=''; }
+
+/* ============================================================
+   ABA: FUNCIONÁRIOS
+   ============================================================ */
+function renderFunc(){
+  const el=$('#tab-func');
+  let byCat = CATS.map(c=>({c,list:FUNCS.filter(f=>f.catId===c.id).sort((a,b)=>a.nome.localeCompare(b.nome))}));
+  const semCat = FUNCS.filter(f=>!CATS.some(c=>c.id===f.catId));
+
+  let html='';
+  // Importar
+  html+='<div class="card">'
+    +'<h2><i class="ti ti-file-spreadsheet"></i> Importar escala (Excel / CSV)</h2>'
+    +'<p class="hint">Suba a planilha da escala. O app tenta reconhecer as colunas automaticamente e mostra uma pré-visualização para você conferir antes de importar. Depois é possível editar cada funcionário.</p>'
+    +'<div class="drop" id="drop"><i class="ti ti-cloud-upload"></i><p>Arraste a planilha aqui ou clique para escolher</p><small>.xlsx, .xls ou .csv</small><input type="file" id="file" accept=".xlsx,.xls,.csv" style="display:none"></div>'
+    +'<div class="row-actions"><button class="btn btn-ghost btn-sm" id="btnModelo"><i class="ti ti-download"></i> Baixar planilha modelo</button>'
+    +'<button class="btn btn-ghost btn-sm" id="btnColar"><i class="ti ti-clipboard"></i> Colar lista de nomes</button></div>'
+    +'</div>';
+
+  // Lista
+  html+='<div class="card">'
+    +'<h2><i class="ti ti-users"></i> Funcionários <span class="tag gray">'+FUNCS.length+'</span></h2>'
+    +'<p class="hint">Clique em um nome para ver folga da semana, hora extra, folga de feriado e o saldo do banco de horas.</p>'
+    +'<div class="row-actions" style="margin-top:0;margin-bottom:14px"><button class="btn btn-primary btn-sm" id="btnNovo"><i class="ti ti-user-plus"></i> Novo funcionário</button></div>';
+  if(FUNCS.length===0){
+    html+='<div class="empty"><i class="ti ti-users-plus"></i>Nenhum funcionário ainda.<br>Importe uma planilha, cole a lista de nomes ou cadastre manualmente.</div>';
+  }else{
+    byCat.forEach(g=>{
+      if(g.list.length===0)return;
+      html+='<div style="margin-bottom:8px"><span class="tag '+catClass(g.c.id)+'">'+esc(g.c.nome)+' · '+g.list.length+'</span></div><div class="emp-list" style="margin-bottom:16px">';
+      g.list.forEach(f=>{ html+=empCard(f); });
+      html+='</div>';
+    });
+    if(semCat.length){
+      html+='<div style="margin-bottom:8px"><span class="tag gray">Sem categoria · '+semCat.length+'</span> <span class="muted" style="font-size:12px">— edite para definir a categoria</span></div><div class="emp-list">';
+      semCat.forEach(f=>{ html+=empCard(f); });
+      html+='</div>';
+    }
+  }
+  html+='</div>';
+  el.innerHTML=html;
+
+  // wire
+  $('#btnNovo').onclick=()=>openFuncForm(null);
+  $('#btnModelo').onclick=downloadModelo;
+  $('#btnColar').onclick=openColar;
+  const drop=$('#drop'),file=$('#file');
+  drop.onclick=()=>file.click();
+  file.onchange=e=>{ if(e.target.files[0])handleImport(e.target.files[0]); file.value=''; };
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f)handleImport(f); });
+  $$('.emp',el).forEach(c=>c.onclick=()=>openFuncDetail(c.dataset.id));
+}
+function empCard(f){
+  return '<button class="emp" data-id="'+f.id+'"><div class="av">'+esc(initials(f.nome))+'</div>'
+    +'<div class="nm"><b>'+esc(f.nome)+'</b><span>'+esc(catName(f.catId))+' · '+esc(turnoName(f.turnoId))+'</span></div></button>';
+}
+
+function folgasLabel(folgas){
+  if(!folgas||!folgas.length)return 'Sem folga fixa';
+  return folgas.slice().sort().map(d=>DOW[d]).join(', ');
+}
+function openFuncDetail(id){
+  const f=funcById(id); if(!f)return;
+  const wd=new Array(7).fill(0).map((_,i)=>i);
+  let dowHTML='<div class="dow">'+wd.map(d=>{
+    const off=(f.folgas||[]).includes(d);
+    return '<div class="d '+(off?'off':'work')+'"><b>'+DOW_S[d]+'</b>'+(off?'Folga':'Trab.')+'</div>';
+  }).join('')+'</div>';
+  const saldo=saldoFunc(f.id);
+  const scls=saldo>0?'pos':(saldo<0?'neg':'zero');
+  let body=''
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="av" style="width:48px;height:48px;font-size:18px;background:var(--brand);color:#fff;border-radius:12px;display:grid;place-items:center;font-weight:800">'+esc(initials(f.nome))+'</div>'
+    +'<div><div style="font-weight:800;font-size:18px">'+esc(f.nome)+'</div><div><span class="tag '+catClass(f.catId)+'">'+esc(catName(f.catId))+'</span> <span class="tag gray">'+esc(turnoName(f.turnoId))+'</span></div></div></div>'
+    +'<div class="kv"><span class="k"><i class="ti ti-clock"></i> Horário</span><span class="v">'+esc(f.entrada||'—')+' às '+esc(f.saida||'—')+'</span></div>'
+    +'<div class="kv"><span class="k"><i class="ti ti-bed"></i> Folga da semana</span><span class="v">'+esc(folgasLabel(f.folgas))+'</span></div>'
+    +'<div class="kv"><span class="k"><i class="ti ti-clock-plus"></i> Faz hora extra?</span><span class="v">'+(f.horaExtra?'<span style="color:var(--ok)">Sim</span>':'Não')+'</span></div>'
+    +'<div class="kv"><span class="k"><i class="ti ti-calendar-off"></i> Folga em feriado?</span><span class="v">'+(f.folgaFeriado?'<span style="color:var(--ok)">Sim</span>':'Não (trabalha)')+'</span></div>'
+    +'<div class="kv"><span class="k"><i class="ti ti-clock-hour-4"></i> Banco de horas</span><span class="v saldo '+scls+'" style="font-size:20px">'+fmtH(saldo)+'</span></div>'
+    +'<div style="margin-top:6px;font-size:12px;color:var(--muted);font-weight:600">Escala semanal</div>'+dowHTML;
+  const footer='<button class="btn btn-danger btn-sm" id="mDel"><i class="ti ti-trash"></i> Excluir</button>'
+    +'<button class="btn btn-ghost btn-sm" id="mEdit"><i class="ti ti-edit"></i> Editar</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="closeModal()">Fechar</button>';
+  openModal(f.nome,'ti-user',body,footer);
+  $('#mEdit').onclick=()=>openFuncForm(f.id);
+  $('#mDel').onclick=()=>{ if(confirm('Excluir '+f.nome+'? Isso remove também as trocas e lançamentos ligados a ele.')){
+    FUNCS=FUNCS.filter(x=>x.id!==f.id);
+    TROCAS=TROCAS.filter(t=>t.aId!==f.id&&t.bId!==f.id);
+    BANCO=BANCO.filter(b=>b.funcId!==f.id);
+    saveAll();closeModal();render();toast('Funcionário excluído');
+  }};
+}
+
+function openFuncForm(id){
+  const f=id?funcById(id):{nome:'',catId:CATS[0]?.id||'',turnoId:TURNOS[0]?.id||'',entrada:TURNOS[0]?.ini||'',saida:TURNOS[0]?.fim||'',folgas:[],horaExtra:false,folgaFeriado:false,saldoInicial:0};
+  const catOpts=CATS.map(c=>'<option value="'+c.id+'"'+(c.id===f.catId?' selected':'')+'>'+esc(c.nome)+'</option>').join('');
+  const turnoOpts=TURNOS.map(t=>'<option value="'+t.id+'"'+(t.id===f.turnoId?' selected':'')+'>'+esc(t.nome)+' ('+t.ini+'–'+t.fim+')</option>').join('');
+  const daysHTML=DOW.map((d,i)=>'<label><input type="checkbox" class="fday" value="'+i+'"'+((f.folgas||[]).includes(i)?' checked':'')+'> '+DOW_S[i]+'</label>').join('');
+  let body=''
+    +'<div class="f-wrap" style="margin-bottom:12px"><label class="f">Nome*</label><input id="fNome" value="'+esc(f.nome)+'" placeholder="Nome do funcionário"></div>'
+    +'<div class="two"><div class="f-wrap"><label class="f">Categoria</label><select id="fCat">'+catOpts+'</select></div>'
+    +'<div class="f-wrap"><label class="f">Turno</label><select id="fTurno">'+turnoOpts+'</select></div></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f">Entrada</label><input id="fEnt" value="'+esc(f.entrada||'')+'" placeholder="07:00"></div>'
+    +'<div class="f-wrap"><label class="f">Saída</label><input id="fSai" value="'+esc(f.saida||'')+'" placeholder="13:00"></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f">Folga da semana</label><div class="days-pick">'+daysHTML+'</div></div>'
+    +'<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">'
+    +'<label class="switch"><input type="checkbox" id="fExtra"'+(f.horaExtra?' checked':'')+'> Faz hora extra</label>'
+    +'<label class="switch"><input type="checkbox" id="fFer"'+(f.folgaFeriado?' checked':'')+'> Folga em feriado</label></div>'
+    +'<div class="f-wrap" style="margin-top:12px;max-width:220px"><label class="f">Saldo inicial banco de horas</label><input id="fSaldo" type="number" step="0.5" value="'+(f.saldoInicial||0)+'"></div>';
+  const footer='<button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button><button class="btn btn-primary btn-sm" id="fSave"><i class="ti ti-check"></i> Salvar</button>';
+  openModal(id?'Editar funcionário':'Novo funcionário','ti-user-plus',body,footer);
+  // auto preencher horário ao trocar turno (só se novo/vazio)
+  $('#fTurno').onchange=e=>{ const t=turnoOf(e.target.value); if(t){ if(!$('#fEnt').value)$('#fEnt').value=t.ini; if(!$('#fSai').value)$('#fSai').value=t.fim; } };
+  $('#fSave').onclick=()=>{
+    const nome=$('#fNome').value.trim();
+    if(!nome){toast('Informe o nome','err');return;}
+    const folgas=$$('.fday').filter(c=>c.checked).map(c=>+c.value);
+    const data={nome,catId:$('#fCat').value,turnoId:$('#fTurno').value,entrada:$('#fEnt').value.trim(),saida:$('#fSai').value.trim(),
+      folgas,horaExtra:$('#fExtra').checked,folgaFeriado:$('#fFer').checked,saldoInicial:+$('#fSaldo').value||0};
+    if(id){ Object.assign(funcById(id),data); }
+    else { data.id=uid(); FUNCS.push(data); }
+    saveAll();closeModal();render();toast('Funcionário salvo','ok');
+  };
+}
+
+function openColar(){
+  let body='<p class="hint" style="margin-top:0">Cole um nome por linha. Todos entram sem categoria — depois é só clicar em cada um para completar turno, folga etc.</p>'
+    +'<textarea id="clNomes" rows="8" placeholder="Maria Silva&#10;João Souza&#10;Ana Costa"></textarea>'
+    +'<div class="f-wrap" style="margin-top:12px;max-width:260px"><label class="f">Categoria para todos (opcional)</label><select id="clCat"><option value="">— sem categoria —</option>'+CATS.map(c=>'<option value="'+c.id+'">'+esc(c.nome)+'</option>').join('')+'</select></div>';
+  const footer='<button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button><button class="btn btn-primary btn-sm" id="clSave"><i class="ti ti-check"></i> Adicionar</button>';
+  openModal('Colar lista de nomes','ti-clipboard',body,footer);
+  $('#clSave').onclick=()=>{
+    const cat=$('#clCat').value;
+    const nomes=$('#clNomes').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    if(!nomes.length){toast('Cole ao menos um nome','err');return;}
+    let n=0;
+    nomes.forEach(nome=>{
+      if(FUNCS.some(f=>norm(f.nome)===norm(nome)))return;
+      FUNCS.push({id:uid(),nome,catId:cat,turnoId:TURNOS[0]?.id||'',entrada:TURNOS[0]?.ini||'',saida:TURNOS[0]?.fim||'',folgas:[],horaExtra:false,folgaFeriado:false,saldoInicial:0});
+      n++;
+    });
+    saveAll();closeModal();render();toast(n+' funcionário(s) adicionado(s)','ok');
+  };
+}
+
+/* ================= importação de planilha ================= */
+function downloadModelo(){
+  const aoa=[
+    ['Nome','Categoria','Turno','Entrada','Saída','Folga semanal','Hora extra','Folga feriado'],
+    ['Maria Silva','Balconista','Manhã','07:00','13:00','Domingo','Não','Sim'],
+    ['João Souza','Entregador','Tarde','13:00','19:00','Segunda','Sim','Não'],
+    ['Ana Costa','Operador de Caixa','Noite','19:00','22:00','Quarta, Domingo','Não','Sim'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:20},{wch:18},{wch:10},{wch:10},{wch:10},{wch:18},{wch:11},{wch:12}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Escala');
+  XLSX.writeFile(wb,'modelo-escala-farmacia.xlsx');
+}
+function readWorkbook(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    const isCsv=/\.csv$/i.test(file.name);
+    r.onload=()=>{ try{
+      const wb = isCsv ? XLSX.read(r.result,{type:'string'}) : XLSX.read(new Uint8Array(r.result),{type:'array'});
+      const sh = wb.Sheets[wb.SheetNames[0]];
+      res(XLSX.utils.sheet_to_json(sh,{header:1,raw:true,defval:''}));
+    }catch(e){rej(e);} };
+    r.onerror=rej;
+    if(isCsv)r.readAsText(file); else r.readAsArrayBuffer(file);
+  });
+}
+function excelTimeToStr(v){
+  if(v==null||v==='')return '';
+  if(typeof v==='number'){
+    if(v>0&&v<1){ const mins=Math.round(v*24*60); return pad2(Math.floor(mins/60))+':'+pad2(mins%60); }
+    if(v>=100&&v<=2359){ return pad2(Math.floor(v/100))+':'+pad2(v%100); }
+    if(v>=0&&v<=23)return pad2(v)+':00';
+    return String(v);
+  }
+  const m=/(\d{1,2})\s*[:hH]\s*(\d{0,2})/.exec(String(v));
+  if(m)return pad2(+m[1])+':'+pad2(+(m[2]||0));
+  return String(v).trim();
+}
+function mapCatValue(v){
+  const s=norm(v);
+  if(!s)return '';
+  if(/balcon|balcao/.test(s))return 'balconista';
+  if(/entreg|motoboy|motoqueir|deliver|motoc/.test(s))return 'entregador';
+  if(/caixa|operador de caixa|frente de caixa/.test(s))return 'caixa';
+  const c=CATS.find(c=>norm(c.nome)===s||c.id===s); return c?c.id:'';
+}
+function mapTurnoValue(v){
+  const s=norm(v);
+  if(/manh|matut/.test(s))return TURNOS.find(t=>t.id==='manha')?.id||TURNOS[0]?.id;
+  if(/tarde|vesper/.test(s))return TURNOS.find(t=>t.id==='tarde')?.id||TURNOS[0]?.id;
+  if(/noit|notur/.test(s))return TURNOS.find(t=>t.id==='noite')?.id||TURNOS[0]?.id;
+  const t=TURNOS.find(t=>norm(t.nome)===s||t.id===s); return t?t.id:'';
+}
+function mapDays(v){
+  const s=norm(v); if(!s)return [];
+  const out=new Set();
+  const keys=[['dom',0],['seg',1],['ter',2],['qua',3],['qui',4],['sex',5],['sab',6]];
+  s.split(/[,;\/e]| e |\s+/).map(x=>x.trim()).filter(Boolean).forEach(tok=>{
+    if(/^\d$/.test(tok)){const n=+tok;if(n>=0&&n<=6)out.add(n);return;}
+    for(const [k,i] of keys){ if(tok.startsWith(k)){out.add(i);return;} }
+  });
+  // texto contínuo
+  keys.forEach(([k,i])=>{ if(s.includes(k))out.add(i); });
+  return Array.from(out).sort();
+}
+function mapBool(v){ const s=norm(v); return /^(sim|s|x|1|true|verdadeiro|yes|y)$/.test(s)||/\bsim\b/.test(s); }
+
+const FIELD_DEFS=[
+  {key:'nome',label:'Nome',re:/nome|funcion|colaborad|servidor/},
+  {key:'categoria',label:'Categoria',re:/categ|fun[cç][aã]o|cargo|setor|funcao/},
+  {key:'turno',label:'Turno',re:/turno|per[ií]odo|periodo|escala/},
+  {key:'entrada',label:'Entrada',re:/entrada|in[ií]cio|inicio|começa|comeca/},
+  {key:'saida',label:'Saída',re:/sa[ií]da|saida|fim|t[eé]rmino|termino|termina/},
+  {key:'folga',label:'Folga semanal',re:/folga|descanso|day ?off|dsr/},
+  {key:'horaextra',label:'Hora extra',re:/hora ?extra|\bextra/},
+  {key:'feriado',label:'Folga feriado',re:/feriado|folga.*feriad/},
+];
+async function handleImport(file){
+  let rows;
+  try{ rows=await readWorkbook(file); }
+  catch(e){ toast('Não consegui ler o arquivo','err'); return; }
+  rows=(rows||[]).filter(r=>r&&r.some(c=>String(c).trim()!==''));
+  if(rows.length<1){ toast('Planilha vazia','err'); return; }
+  // achar linha de cabeçalho (a que tem 'nome' ou a com mais texto)
+  let hIdx=0,best=-1;
+  for(let i=0;i<Math.min(rows.length,6);i++){
+    const cells=rows[i].map(c=>norm(c));
+    const hasNome=cells.some(c=>/nome|funcion|colaborad/.test(c));
+    const score=cells.filter(c=>c&&/[a-z]/.test(c)).length + (hasNome?10:0);
+    if(score>best){best=score;hIdx=i;}
+  }
+  const header=rows[hIdx].map(c=>String(c).trim());
+  const data=rows.slice(hIdx+1).filter(r=>r.some(c=>String(c).trim()!==''));
+  // guesses
+  const guess={};
+  FIELD_DEFS.forEach(fd=>{
+    let idx=header.findIndex(h=>fd.re.test(norm(h)));
+    guess[fd.key]= idx>=0? idx : -1;
+  });
+  openImportMapper(header,data,guess,file.name);
+}
+function openImportMapper(header,data,guess,fname){
+  const colOpts=(sel)=>'<option value="-1">— nenhuma —</option>'+header.map((h,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+esc(h||('Coluna '+(i+1)))+'</option>').join('');
+  let mapRows=FIELD_DEFS.map(fd=>'<tr><td style="font-weight:600">'+fd.label+(fd.key==='nome'?' *':'')+'</td><td><select class="mapSel" data-key="'+fd.key+'">'+colOpts(guess[fd.key])+'</select></td></tr>').join('');
+  let body='<p class="hint" style="margin-top:0">Arquivo <b>'+esc(fname)+'</b> — '+data.length+' linha(s). Confira o mapeamento das colunas. Categoria, turno, dias e sim/não são reconhecidos automaticamente.</p>'
+    +'<div class="tbl-wrap"><table class="mini-tbl"><thead><tr><th>Campo do app</th><th>Coluna da planilha</th></tr></thead><tbody>'+mapRows+'</tbody></table></div>'
+    +'<div style="margin-top:14px"><label class="switch"><input type="checkbox" id="impUpsert" checked> Atualizar funcionários com o mesmo nome (evita duplicados)</label></div>'
+    +'<div id="impPreview" style="margin-top:12px"></div>';
+  const footer='<button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button><button class="btn btn-primary btn-sm" id="impGo"><i class="ti ti-download"></i> Importar</button>';
+  openModal('Importar escala','ti-file-spreadsheet',body,footer);
+  function buildRecords(){
+    const m={}; $$('.mapSel').forEach(s=>m[s.dataset.key]=+s.value);
+    const recs=[];
+    data.forEach(r=>{
+      const get=k=> m[k]>=0? r[m[k]] : '';
+      const nome=String(get('nome')||'').trim();
+      if(!nome)return;
+      const turnoId=mapTurnoValue(get('turno'))||TURNOS[0]?.id||'';
+      const t=turnoOf(turnoId);
+      recs.push({
+        nome,
+        catId:mapCatValue(get('categoria')),
+        turnoId,
+        entrada:excelTimeToStr(get('entrada'))|| (t?t.ini:''),
+        saida:excelTimeToStr(get('saida'))|| (t?t.fim:''),
+        folgas:mapDays(get('folga')),
+        horaExtra:mapBool(get('horaextra')),
+        folgaFeriado:mapBool(get('feriado')),
+        saldoInicial:0,
+      });
+    });
+    return recs;
+  }
+  function refreshPreview(){
+    const recs=buildRecords();
+    let h='<div class="alert info"><i class="ti ti-eye"></i> Pré-visualização: '+recs.length+' funcionário(s) serão importados.</div>';
+    if(recs.length){
+      h+='<div class="tbl-wrap"><table class="mini-tbl"><thead><tr><th>Nome</th><th>Categoria</th><th>Turno</th><th>Horário</th><th>Folga</th><th>H.Extra</th><th>Fer.</th></tr></thead><tbody>';
+      recs.slice(0,8).forEach(x=>{
+        h+='<tr><td>'+esc(x.nome)+'</td><td>'+(x.catId?esc(catName(x.catId)):'<span class="muted">?</span>')+'</td><td>'+esc(turnoName(x.turnoId))+'</td><td>'+esc(x.entrada)+'–'+esc(x.saida)+'</td><td>'+esc(folgasLabel(x.folgas).replace('Sem folga fixa','—'))+'</td><td>'+(x.horaExtra?'Sim':'—')+'</td><td>'+(x.folgaFeriado?'Sim':'—')+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+      if(recs.length>8)h+='<div class="muted" style="font-size:12px;margin-top:6px">… e mais '+(recs.length-8)+' linha(s).</div>';
+    }
+    $('#impPreview').innerHTML=h;
+  }
+  $$('.mapSel').forEach(s=>s.onchange=refreshPreview);
+  refreshPreview();
+  $('#impGo').onclick=()=>{
+    const recs=buildRecords();
+    if(!recs.length){toast('Nada para importar','err');return;}
+    const upsert=$('#impUpsert').checked;
+    let add=0,upd=0;
+    recs.forEach(rec=>{
+      const ex= upsert ? FUNCS.find(f=>norm(f.nome)===norm(rec.nome)) : null;
+      if(ex){ rec.saldoInicial=ex.saldoInicial||0; Object.assign(ex,rec); ex.id=ex.id||uid(); upd++; }
+      else { rec.id=uid(); FUNCS.push(rec); add++; }
+    });
+    saveAll();closeModal();render();
+    toast(add+' adicionado(s), '+upd+' atualizado(s)','ok');
+  };
+}
+
+/* ============================================================
+   ABA: ESCALA DIÁRIA
+   ============================================================ */
+let diaSel=todayStr();
+function renderDia(){
+  const el=$('#tab-dia');
+  const map=daySchedule(diaSel);
+  const {out}=shortages(diaSel);
+  const isHol=FERIAS.find(h=>h.data===diaSel);
+
+  let html='<div class="card"><h2><i class="ti ti-calendar-week"></i> Escala diária</h2>'
+    +'<div class="daybar"><div class="f-wrap" style="max-width:190px"><label class="f">Data</label><input type="date" id="diaInput" value="'+diaSel+'"></div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;padding-bottom:1px"><button class="btn btn-ghost btn-sm" id="diaPrev"><i class="ti ti-chevron-left"></i></button><button class="btn btn-ghost btn-sm" id="diaToday">Hoje</button><button class="btn btn-ghost btn-sm" id="diaNext"><i class="ti ti-chevron-right"></i></button></div></div>'
+    +'<div style="margin-top:6px;font-weight:700;font-size:15px">'+esc(fmtDateLong(diaSel))+(isHol?' <span class="tag folga"><i class="ti ti-confetti"></i> Feriado: '+esc(isHol.nome)+'</span>':'')+'</div>';
+  html+='</div>';
+
+  // alertas
+  if(FUNCS.length){
+    html+='<div class="card"><h2><i class="ti ti-alert-triangle"></i> Cobertura mínima</h2>';
+    if(out.length===0){
+      html+='<div class="alert ok"><i class="ti ti-circle-check"></i> Todas as categorias atingem o mínimo em todos os turnos neste dia.</div>';
+    }else{
+      html+='<div class="alert danger"><i class="ti ti-alert-triangle-filled"></i><div><b>Desfalque detectado</b> — reforce a escala:<ul style="margin:6px 0 0;padding-left:18px">'
+        +out.map(o=>'<li><b>'+esc(o.turno)+'</b> · '+esc(o.cat)+': tem '+o.have+', mínimo '+o.min+' <b>(faltam '+o.falta+')</b></li>').join('')
+        +'</ul></div></div>';
+    }
+    html+='</div>';
+  }
+
+  // por turno
+  if(FUNCS.length===0){
+    html+='<div class="card"><div class="empty"><i class="ti ti-calendar-off"></i>Cadastre funcionários para ver a escala do dia.</div></div>';
+  }else{
+    html+='<div class="card"><h2><i class="ti ti-list-check"></i> Escalados para trabalhar</h2>';
+    TURNOS.forEach(t=>{
+      const working=FUNCS.filter(f=>map[f.id].status==='trabalha'&&map[f.id].turnoId===t.id)
+        .sort((a,b)=>a.catId.localeCompare(b.catId)||a.nome.localeCompare(b.nome));
+      html+='<div class="shift"><div class="head"><b><i class="ti ti-sun"></i> '+esc(t.nome)+'</b><span class="time">'+esc(t.ini)+' – '+esc(t.fim)+' · '+working.length+' pessoa(s)</span></div><div class="body">';
+      if(working.length===0){ html+='<div class="line"><span class="muted">Ninguém escalado neste turno.</span></div>'; }
+      else working.forEach(f=>{
+        const s=map[f.id];
+        let badges='<span class="tag '+catClass(f.catId)+'">'+esc(catName(f.catId))+'</span>';
+        if(f.horaExtra)badges+=' <span class="tag extra"><i class="ti ti-clock-plus"></i> H.extra</span>';
+        if(s.trocaCom){ const o=funcById(s.trocaCom); badges+=' <span class="tag troca"><i class="ti ti-arrows-exchange"></i> Troca c/ '+esc(o?o.nome.split(' ')[0]:'?')+'</span>'; }
+        html+='<div class="line"><span class="nm">'+esc(f.nome)+'</span><span class="hr">'+esc(s.entrada||'—')+' – '+esc(s.saida||'—')+'</span></div><div style="padding:0 0 8px"><div class="chips">'+badges+(s.trocaObs?' <span class="muted" style="font-size:11.5px">'+esc(s.trocaObs)+'</span>':'')+'</div></div>';
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+
+    // folgas
+    const off=FUNCS.filter(f=>map[f.id].status==='folga').sort((a,b)=>a.nome.localeCompare(b.nome));
+    html+='<div class="card"><h2><i class="ti ti-bed"></i> De folga hoje <span class="tag gray">'+off.length+'</span></h2>';
+    if(off.length===0)html+='<div class="muted" style="font-size:13.5px">Ninguém de folga.</div>';
+    else{ html+='<div class="chips">'; off.forEach(f=>{ const s=map[f.id]; let extra=''; if(s.trocaCom){const o=funcById(s.trocaCom);extra=' <i class="ti ti-arrows-exchange" title="por troca"></i>'; }
+      html+='<span class="tag folga">'+esc(f.nome)+' · '+esc(s.motivo||'Folga')+extra+'</span>'; }); html+='</div>'; }
+    html+='</div>';
+
+    // trocas do dia
+    const td=TROCAS.filter(t=>(t.datas||[]).includes(diaSel));
+    if(td.length){
+      html+='<div class="card"><h2><i class="ti ti-arrows-exchange"></i> Trocas neste dia</h2><div class="chips" style="flex-direction:column;align-items:stretch">';
+      td.forEach(t=>{ const a=funcById(t.aId),b=funcById(t.bId);
+        html+='<div class="alert warn" style="margin-bottom:8px"><i class="ti ti-arrows-exchange"></i><div><b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b>'+(t.obs?' — '+esc(t.obs):'')+'</div></div>'; });
+      html+='</div></div>';
+    }
+  }
+  el.innerHTML=html;
+  $('#diaInput').onchange=e=>{ diaSel=e.target.value||todayStr(); renderDia(); };
+  $('#diaToday').onclick=()=>{ diaSel=todayStr(); renderDia(); };
+  $('#diaPrev').onclick=()=>{ diaSel=shiftDay(diaSel,-1); renderDia(); };
+  $('#diaNext').onclick=()=>{ diaSel=shiftDay(diaSel,1); renderDia(); };
+}
+function shiftDay(s,delta){ const d=parseDate(s)||new Date(); d.setDate(d.getDate()+delta); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+
+/* ============================================================
+   ABA: TROCAS
+   ============================================================ */
+function renderTrocas(){
+  const el=$('#tab-trocas');
+  let html='<div class="card"><h2><i class="ti ti-arrows-exchange"></i> Registrar troca de horário</h2>'
+    +'<p class="hint">Ex.: nos dias 01 e 06, o Funcionário 01 trocou de horário com o Funcionário 02. A troca aparece automaticamente na escala diária, trocando os horários/folgas entre os dois nesses dias.</p>';
+  if(FUNCS.length<2){
+    html+='<div class="empty"><i class="ti ti-users"></i>Cadastre pelo menos 2 funcionários para registrar trocas.</div></div>';
+    el.innerHTML=html; return;
+  }
+  const opts=FUNCS.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(f=>'<option value="'+f.id+'">'+esc(f.nome)+' ('+esc(catName(f.catId))+')</option>').join('');
+  html+='<div class="two"><div class="f-wrap"><label class="f">Funcionário 1</label><select id="trA">'+opts+'</select></div>'
+    +'<div class="f-wrap"><label class="f">Funcionário 2</label><select id="trB">'+opts+'</select></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f">Observação (opcional)</label><input id="trObs" placeholder="ex.: consulta médica"></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f">Dias da troca</label><div class="inline-add"><div class="f-wrap"><input type="date" id="trData" value="'+diaSel+'"></div><button class="btn btn-ghost btn-sm" id="trAddData"><i class="ti ti-plus"></i> Adicionar dia</button></div><div class="chips" id="trDatas" style="margin-top:10px"></div></div>'
+    +'<div class="row-actions"><button class="btn btn-primary btn-sm" id="trSave"><i class="ti ti-check"></i> Salvar troca</button></div></div>';
+
+  // lista
+  html+='<div class="card"><h2><i class="ti ti-history"></i> Trocas registradas <span class="tag gray">'+TROCAS.length+'</span></h2>';
+  if(TROCAS.length===0)html+='<div class="empty"><i class="ti ti-arrows-exchange"></i>Nenhuma troca registrada.</div>';
+  else{
+    const sorted=TROCAS.slice().sort((a,b)=>(b.datas[0]||'').localeCompare(a.datas[0]||''));
+    html+='<div class="tbl-wrap"><table><thead><tr><th>Funcionários</th><th>Dias</th><th>Obs</th><th></th></tr></thead><tbody>';
+    sorted.forEach(t=>{ const a=funcById(t.aId),b=funcById(t.bId);
+      html+='<tr><td><b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b></td><td>'+ (t.datas||[]).map(d=>'<span class="tag gray">'+fmtDateBR(d)+'</span>').join(' ') +'</td><td class="muted">'+esc(t.obs||'')+'</td><td style="text-align:right"><button class="btn btn-danger btn-sm trDel" data-id="'+t.id+'"><i class="ti ti-trash"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+
+  // form state
+  let datas=[];
+  const renderDatas=()=>{ $('#trDatas').innerHTML = datas.length? datas.map((d,i)=>'<span class="tag">'+fmtDateBR(d)+' <button data-i="'+i+'" class="rmData" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800">×</button></span>').join('') : '<span class="muted" style="font-size:12.5px">Nenhum dia adicionado ainda.</span>';
+    $$('.rmData').forEach(b=>b.onclick=()=>{ datas.splice(+b.dataset.i,1); renderDatas(); }); };
+  renderDatas();
+  $('#trAddData').onclick=()=>{ const v=$('#trData').value; if(!v)return; if(!datas.includes(v))datas.push(v); datas.sort(); renderDatas(); };
+  $('#trSave').onclick=()=>{
+    const aId=$('#trA').value,bId=$('#trB').value;
+    if(aId===bId){toast('Escolha dois funcionários diferentes','err');return;}
+    if(!datas.length){ const v=$('#trData').value; if(v)datas.push(v); }
+    if(!datas.length){toast('Adicione ao menos um dia','err');return;}
+    TROCAS.push({id:uid(),aId,bId,datas:datas.slice(),obs:$('#trObs').value.trim()});
+    saveAll();render();toast('Troca registrada','ok');
+  };
+  $$('.trDel').forEach(b=>b.onclick=()=>{ if(confirm('Remover esta troca?')){ TROCAS=TROCAS.filter(t=>t.id!==b.dataset.id); saveAll();render(); } });
+}
+
+/* ============================================================
+   ABA: BANCO DE HORAS
+   ============================================================ */
+function renderBanco(){
+  const el=$('#tab-banco');
+  let html='<div class="card"><h2><i class="ti ti-clock-hour-4"></i> Lançar hora extra / compensação</h2>'
+    +'<p class="hint">Registre horas extras feitas por demanda especial (valor positivo, ex.: 2) ou horas compensadas/descontadas (valor negativo, ex.: -1,5). O saldo de cada funcionário é somado automaticamente.</p>';
+  if(FUNCS.length===0){ html+='<div class="empty"><i class="ti ti-users"></i>Cadastre funcionários primeiro.</div></div>'; el.innerHTML=html; return; }
+  const opts=FUNCS.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(f=>'<option value="'+f.id+'">'+esc(f.nome)+'</option>').join('');
+  html+='<div class="inline-add"><div class="f-wrap" style="min-width:180px"><label class="f">Funcionário</label><select id="bkFunc">'+opts+'</select></div>'
+    +'<div class="f-wrap" style="max-width:150px"><label class="f">Data</label><input type="date" id="bkData" value="'+todayStr()+'"></div>'
+    +'<div class="f-wrap" style="max-width:120px"><label class="f">Horas (+/-)</label><input id="bkHoras" type="number" step="0.25" placeholder="2"></div>'
+    +'<div class="f-wrap" style="min-width:160px"><label class="f">Motivo</label><input id="bkMot" placeholder="ex.: reposição de estoque"></div>'
+    +'<button class="btn btn-primary btn-sm" id="bkSave"><i class="ti ti-plus"></i> Lançar</button></div></div>';
+
+  // saldos
+  html+='<div class="card"><h2><i class="ti ti-scale"></i> Saldos por funcionário</h2><div class="tbl-wrap"><table><thead><tr><th>Funcionário</th><th>Categoria</th><th style="text-align:right">Saldo</th></tr></thead><tbody>';
+  FUNCS.slice().sort((a,b)=>saldoFunc(b.id)-saldoFunc(a.id)).forEach(f=>{
+    const s=saldoFunc(f.id); const cls=s>0?'pos-num':(s<0?'neg-num':'muted');
+    html+='<tr><td><b>'+esc(f.nome)+'</b></td><td>'+esc(catName(f.catId))+'</td><td style="text-align:right" class="'+cls+'">'+fmtH(s)+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+
+  // extrato
+  html+='<div class="card"><h2><i class="ti ti-list"></i> Extrato de lançamentos <span class="tag gray">'+BANCO.length+'</span></h2>';
+  if(BANCO.length===0)html+='<div class="empty"><i class="ti ti-clock-off"></i>Nenhum lançamento ainda.</div>';
+  else{
+    const sorted=BANCO.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+    html+='<div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Funcionário</th><th>Motivo</th><th style="text-align:right">Horas</th><th></th></tr></thead><tbody>';
+    sorted.forEach(b=>{ const f=funcById(b.funcId); const cls=b.horas>0?'pos-num':(b.horas<0?'neg-num':'muted');
+      html+='<tr><td>'+fmtDateBR(b.data)+'</td><td>'+esc(f?f.nome:'?')+'</td><td class="muted">'+esc(b.motivo||'')+'</td><td style="text-align:right" class="'+cls+'">'+fmtH(b.horas)+'</td><td style="text-align:right"><button class="btn btn-danger btn-sm bkDel" data-id="'+b.id+'"><i class="ti ti-trash"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+
+  $('#bkSave').onclick=()=>{
+    const funcId=$('#bkFunc').value; const horas=parseFloat(String($('#bkHoras').value).replace(',','.'));
+    if(!funcId){toast('Escolha o funcionário','err');return;}
+    if(!horas||isNaN(horas)){toast('Informe as horas (ex.: 2 ou -1.5)','err');return;}
+    BANCO.push({id:uid(),funcId,data:$('#bkData').value||todayStr(),horas,motivo:$('#bkMot').value.trim()});
+    saveAll();renderBanco();toast('Lançamento registrado','ok');
+  };
+  $$('.bkDel').forEach(b=>b.onclick=()=>{ if(confirm('Remover este lançamento?')){ BANCO=BANCO.filter(x=>x.id!==b.dataset.id); saveAll();renderBanco(); } });
+}
+
+/* ============================================================
+   ABA: CONFIGURAÇÕES
+   ============================================================ */
+function renderConfig(){
+  const el=$('#tab-config');
+  ensureMinimos();
+  let html='';
+  // mínimos
+  html+='<div class="card"><h2><i class="ti ti-shield-check"></i> Mínimo de funcionários por turno e categoria</h2>'
+    +'<p class="hint">Quando a escala de um dia ficar abaixo desses números, o app avisa na aba “Escala diária”.</p>'
+    +'<div class="tbl-wrap"><table><thead><tr><th>Turno</th>'+CATS.map(c=>'<th>'+esc(c.nome)+'</th>').join('')+'</tr></thead><tbody>';
+  TURNOS.forEach(t=>{
+    html+='<tr><td><b>'+esc(t.nome)+'</b><br><span class="muted" style="font-size:11.5px">'+esc(t.ini)+'–'+esc(t.fim)+'</span></td>'
+      +CATS.map(c=>'<td><input type="number" min="0" style="max-width:80px" class="minInp" data-t="'+t.id+'" data-c="'+c.id+'" value="'+(MINIMOS[t.id][c.id]||0)+'"></td>').join('')+'</tr>';
+  });
+  html+='</tbody></table></div><div class="row-actions"><button class="btn btn-primary btn-sm" id="minSave"><i class="ti ti-check"></i> Salvar mínimos</button></div></div>';
+
+  // turnos
+  html+='<div class="card"><h2><i class="ti ti-clock-2"></i> Turnos</h2><div class="tbl-wrap"><table><thead><tr><th>Nome</th><th>Início</th><th>Fim</th><th></th></tr></thead><tbody id="turnoBody">';
+  TURNOS.forEach(t=>{
+    html+='<tr data-id="'+t.id+'"><td><input class="tN" value="'+esc(t.nome)+'"></td><td><input class="tI" style="max-width:110px" value="'+esc(t.ini)+'"></td><td><input class="tF" style="max-width:110px" value="'+esc(t.fim)+'"></td><td style="text-align:right"><button class="btn btn-danger btn-sm turnoDel" data-id="'+t.id+'"><i class="ti ti-trash"></i></button></td></tr>';
+  });
+  html+='</tbody></table></div><div class="inline-add" style="margin-top:12px"><div class="f-wrap"><input id="ntN" placeholder="Nome do turno"></div><div class="f-wrap" style="max-width:120px"><input id="ntI" placeholder="Início 07:00"></div><div class="f-wrap" style="max-width:120px"><input id="ntF" placeholder="Fim 13:00"></div><button class="btn btn-ghost btn-sm" id="turnoAdd"><i class="ti ti-plus"></i> Adicionar turno</button></div>'
+    +'<div class="row-actions"><button class="btn btn-primary btn-sm" id="turnoSave"><i class="ti ti-check"></i> Salvar turnos</button></div></div>';
+
+  // categorias
+  html+='<div class="card"><h2><i class="ti ti-tag"></i> Categorias</h2><p class="hint">Categorias usadas na escala e nos alertas de cobertura.</p><div class="tbl-wrap"><table><thead><tr><th>Nome</th><th></th></tr></thead><tbody>';
+  CATS.forEach(c=>{
+    const inUse=FUNCS.some(f=>f.catId===c.id);
+    html+='<tr><td><input class="cN" data-id="'+c.id+'" value="'+esc(c.nome)+'"></td><td style="text-align:right">'+(inUse?'<span class="muted" style="font-size:11.5px">em uso</span>':'<button class="btn btn-danger btn-sm catDel" data-id="'+c.id+'"><i class="ti ti-trash"></i></button>')+'</td></tr>';
+  });
+  html+='</tbody></table></div><div class="inline-add" style="margin-top:12px"><div class="f-wrap"><input id="ncN" placeholder="Nova categoria"></div><button class="btn btn-ghost btn-sm" id="catAdd"><i class="ti ti-plus"></i> Adicionar</button></div>'
+    +'<div class="row-actions"><button class="btn btn-primary btn-sm" id="catSave"><i class="ti ti-check"></i> Salvar categorias</button></div></div>';
+
+  // feriados
+  html+='<div class="card"><h2><i class="ti ti-confetti"></i> Feriados</h2><p class="hint">Nos feriados, quem tem “folga em feriado” marcada aparece de folga na escala.</p>';
+  html+='<div class="inline-add"><div class="f-wrap" style="max-width:160px"><label class="f">Data</label><input type="date" id="ferData"></div><div class="f-wrap"><label class="f">Nome</label><input id="ferNome" placeholder="ex.: Natal"></div><button class="btn btn-ghost btn-sm" id="ferAdd"><i class="ti ti-plus"></i> Adicionar</button></div>';
+  if(FERIAS.length){
+    html+='<div class="tbl-wrap" style="margin-top:12px"><table><thead><tr><th>Data</th><th>Feriado</th><th></th></tr></thead><tbody>';
+    FERIAS.slice().sort((a,b)=>a.data.localeCompare(b.data)).forEach(h=>{
+      html+='<tr><td>'+fmtDateBR(h.data)+'</td><td>'+esc(h.nome)+'</td><td style="text-align:right"><button class="btn btn-danger btn-sm ferDel" data-d="'+h.data+'"><i class="ti ti-trash"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+
+  // backup
+  html+='<div class="card"><h2><i class="ti ti-database"></i> Backup dos dados</h2><p class="hint">Exporte tudo para um arquivo (guarde como cópia de segurança) ou restaure de um arquivo salvo.</p>'
+    +'<div class="row-actions" style="margin-top:0"><button class="btn btn-ghost btn-sm" id="bkExport"><i class="ti ti-download"></i> Exportar dados</button>'
+    +'<button class="btn btn-ghost btn-sm" id="bkImport"><i class="ti ti-upload"></i> Importar dados</button>'
+    +'<button class="btn btn-danger btn-sm" id="bkClear"><i class="ti ti-trash"></i> Apagar tudo</button></div>'
+    +'<input type="file" id="bkFile" accept="application/json" style="display:none"></div>';
+
+  el.innerHTML=html;
+
+  $('#minSave').onclick=()=>{ $$('.minInp').forEach(i=>{ MINIMOS[i.dataset.t][i.dataset.c]=Math.max(0,+i.value||0); }); saveAll(); toast('Mínimos salvos','ok'); };
+
+  $('#turnoAdd').onclick=()=>{ const n=$('#ntN').value.trim(); if(!n){toast('Nome do turno','err');return;} TURNOS.push({id:uid(),nome:n,ini:$('#ntI').value.trim()||'00:00',fim:$('#ntF').value.trim()||'00:00'}); ensureMinimos(); saveAll(); renderConfig(); };
+  $('#turnoSave').onclick=()=>{ $$('#turnoBody tr').forEach(tr=>{ const t=turnoOf(tr.dataset.id); if(t){ t.nome=$('.tN',tr).value.trim()||t.nome; t.ini=$('.tI',tr).value.trim(); t.fim=$('.tF',tr).value.trim(); } }); saveAll(); toast('Turnos salvos','ok'); renderConfig(); };
+  $$('.turnoDel').forEach(b=>b.onclick=()=>{ if(TURNOS.length<=1){toast('Mantenha ao menos 1 turno','err');return;} if(FUNCS.some(f=>f.turnoId===b.dataset.id)){toast('Há funcionários neste turno','err');return;} TURNOS=TURNOS.filter(t=>t.id!==b.dataset.id); delete MINIMOS[b.dataset.id]; saveAll(); renderConfig(); });
+
+  $('#catAdd').onclick=()=>{ const n=$('#ncN').value.trim(); if(!n){toast('Nome da categoria','err');return;} CATS.push({id:uid(),nome:n}); ensureMinimos(); saveAll(); renderConfig(); };
+  $('#catSave').onclick=()=>{ $$('.cN').forEach(i=>{ const c=CATS.find(c=>c.id===i.dataset.id); if(c)c.nome=i.value.trim()||c.nome; }); saveAll(); toast('Categorias salvas','ok'); render(); };
+  $$('.catDel').forEach(b=>b.onclick=()=>{ if(CATS.length<=1){toast('Mantenha ao menos 1 categoria','err');return;} CATS=CATS.filter(c=>c.id!==b.dataset.id); TURNOS.forEach(t=>{ if(MINIMOS[t.id])delete MINIMOS[t.id][b.dataset.id]; }); saveAll(); renderConfig(); });
+
+  $('#ferAdd').onclick=()=>{ const d=$('#ferData').value; if(!d){toast('Escolha a data','err');return;} if(FERIAS.some(h=>h.data===d)){toast('Data já cadastrada','err');return;} FERIAS.push({data:d,nome:$('#ferNome').value.trim()||'Feriado'}); saveAll(); renderConfig(); };
+  $$('.ferDel').forEach(b=>b.onclick=()=>{ FERIAS=FERIAS.filter(h=>h.data!==b.dataset.d); saveAll(); renderConfig(); });
+
+  $('#bkExport').onclick=()=>{
+    const data={v:1,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='farmaciagest-backup.json'; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('#bkImport').onclick=()=>$('#bkFile').click();
+  $('#bkFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result);
+    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos;
+    ensureMinimos(); saveAll(); render(); toast('Dados importados','ok'); }catch(err){ toast('Arquivo inválido','err'); } }; r.readAsText(f); e.target.value=''; };
+  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[]; saveAll(); render(); toast('Dados apagados'); } };
+}
+
+/* ================= start ================= */
+render();
+</script>
+</body>
+</html>
