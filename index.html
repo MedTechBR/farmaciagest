@@ -117,7 +117,9 @@ input[type=checkbox]{min-height:0}
 .btn-ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line-strong)}.btn-ghost:hover{background:var(--surface-2);border-color:var(--brand)}
 .btn-danger{background:var(--surface);color:var(--danger);border:1px solid var(--danger-line)}.btn-danger:hover{background:var(--danger-soft)}
 .btn-sm{padding:8px 12px;font-size:13px;min-height:40px;border-radius:var(--r2)}
-@media (pointer:coarse){.btn-sm{min-height:44px}}
+.btn-icon{min-width:44px;padding-left:10px;padding-right:10px}
+/* no toque e no telefone, todo alvo vai a 44px */
+@media (pointer:coarse),(max-width:560px){.btn-sm,.seg button{min-height:44px}.icon-btn{width:44px;height:44px}}
 .row-actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s4)}
 
 /* ================= importação ================= */
@@ -921,9 +923,9 @@ function renderDia(){
     +'<button type="button" id="vSem" aria-pressed="'+(vistaDia==='semana')+'"><i class="ti ti-calendar-month" aria-hidden="true"></i> Semana</button>'
     +'</span></h2>'
     +'<div class="daybar"><div class="f-wrap" style="max-width:190px"><label class="f" for="diaInput">Data</label><input type="date" id="diaInput" value="'+diaSel+'"></div>'
-    +'<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" id="diaPrev" type="button" aria-label="'+(vistaDia==='semana'?'Semana anterior':'Dia anterior')+'"><i class="ti ti-chevron-left" aria-hidden="true"></i></button>'
+    +'<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm btn-icon" id="diaPrev" type="button" aria-label="'+(vistaDia==='semana'?'Semana anterior':'Dia anterior')+'"><i class="ti ti-chevron-left" aria-hidden="true"></i></button>'
     +'<button class="btn btn-ghost btn-sm" id="diaToday" type="button">Hoje</button>'
-    +'<button class="btn btn-ghost btn-sm" id="diaNext" type="button" aria-label="'+(vistaDia==='semana'?'Próxima semana':'Próximo dia')+'"><i class="ti ti-chevron-right" aria-hidden="true"></i></button>'
+    +'<button class="btn btn-ghost btn-sm btn-icon" id="diaNext" type="button" aria-label="'+(vistaDia==='semana'?'Próxima semana':'Próximo dia')+'"><i class="ti ti-chevron-right" aria-hidden="true"></i></button>'
     +'<button class="btn btn-ghost btn-sm" id="diaPrint" type="button"><i class="ti ti-printer" aria-hidden="true"></i> Imprimir</button></div></div>';
 
   if(vistaDia==='semana'){
