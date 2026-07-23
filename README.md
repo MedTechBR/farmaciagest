@@ -10,7 +10,13 @@ Gestão de escala, trocas e banco de horas da farmácia. App de página única (
 - **Escala diária** — quem trabalha em cada dia, folgas e extras.
 - **Trocas** — registro de trocas de plantão entre funcionários.
 - **Banco de horas** — saldo positivo/negativo por funcionário.
-- **Configurações** — backup (exportar/importar) dos dados.
+- **Configurações** — mínimos por turno/categoria, turnos, categorias, feriados, backup (exportar/importar) e **banco de dados de teste**.
+
+## Banco de dados de teste
+
+Em **Configurações → Banco de dados de teste**, o botão *Criar banco de teste* povoa o app com uma farmácia fictícia: 12 funcionários nos 3 turnos (com folgas semanais, hora extra e folga de feriado), 3 trocas, 8 lançamentos de banco de horas e os 4 próximos feriados nacionais.
+
+Todo registro criado assim nasce marcado com `demo:true`, aparece com o selo **teste** na lista de funcionários e some junto no botão *Remover dados de teste*. Dados reais nunca são tocados — dá para criar o banco de teste por cima de um cadastro de verdade e depois limpar só o que é fictício.
 
 ## Dados
 
