@@ -237,6 +237,20 @@ tr:last-child td{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
 
+/* ================= recebimento ================= */
+.prog{height:8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--brand-solid);transition:width .3s}
+.rec-item{display:flex;align-items:center;gap:var(--s3);padding:10px 12px;border:1px solid var(--line);border-radius:var(--r2);background:var(--surface-2);margin-bottom:6px}
+.rec-item.feito{background:var(--brand-soft);border-color:var(--brand-line)}
+.rec-item.feito .rec-nm b{text-decoration:line-through;opacity:.65}
+.rec-chk{display:grid;place-items:center;width:44px;height:44px;flex:0 0 auto;cursor:pointer;margin:-6px 0 -6px -6px}
+.rec-chk input{width:22px;height:22px;min-height:0;accent-color:var(--brand-solid);cursor:pointer}
+.rec-nm{flex:1;min-width:0}
+.rec-nm b{display:block;font-size:14px;font-weight:700;line-height:1.35}
+.rec-nm .muted{font-size:12px}
+.rec-item .btn-sm{flex:0 0 auto;min-width:44px;padding-left:10px;padding-right:10px}
+@media(max-width:560px){.rec-item{flex-wrap:wrap}.rec-nm{flex:1 1 60%}}
+
 /* ================= modal ================= */
 .backdrop{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:flex-start;justify-content:center;padding:28px 14px;z-index:60;overflow-y:auto;animation:fade .16s ease-out}
 .modal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r4);max-width:560px;width:100%;box-shadow:var(--sh3);margin:auto;animation:pop .18s ease-out}
@@ -317,6 +331,8 @@ tr:last-child td{border-bottom:none}
   <button data-tab="dia" role="tab" aria-selected="false" aria-controls="tab-dia" id="tb-dia" tabindex="-1"><i class="ti ti-calendar-week" aria-hidden="true"></i> Escala</button>
   <button data-tab="trocas" role="tab" aria-selected="false" aria-controls="tab-trocas" id="tb-trocas" tabindex="-1"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Trocas</button>
   <button data-tab="banco" role="tab" aria-selected="false" aria-controls="tab-banco" id="tb-banco" tabindex="-1"><i class="ti ti-clock-hour-4" aria-hidden="true"></i> Banco de horas</button>
+  <button data-tab="receb" role="tab" aria-selected="false" aria-controls="tab-receb" id="tb-receb" tabindex="-1"><i class="ti ti-package-import" aria-hidden="true"></i> Recebimento</button>
+  <button data-tab="diverg" role="tab" aria-selected="false" aria-controls="tab-diverg" id="tb-diverg" tabindex="-1"><i class="ti ti-file-alert" aria-hidden="true"></i> Divergências</button>
   <button data-tab="config" role="tab" aria-selected="false" aria-controls="tab-config" id="tb-config" tabindex="-1"><i class="ti ti-settings" aria-hidden="true"></i> Configurações</button>
 </nav>
 <div class="wrap">
@@ -324,6 +340,8 @@ tr:last-child td{border-bottom:none}
   <section id="tab-dia" role="tabpanel" aria-labelledby="tb-dia" tabindex="-1" style="display:none"></section>
   <section id="tab-trocas" role="tabpanel" aria-labelledby="tb-trocas" tabindex="-1" style="display:none"></section>
   <section id="tab-banco" role="tabpanel" aria-labelledby="tb-banco" tabindex="-1" style="display:none"></section>
+  <section id="tab-receb" role="tabpanel" aria-labelledby="tb-receb" tabindex="-1" style="display:none"></section>
+  <section id="tab-diverg" role="tabpanel" aria-labelledby="tb-diverg" tabindex="-1" style="display:none"></section>
   <section id="tab-config" role="tabpanel" aria-labelledby="tb-config" tabindex="-1" style="display:none"></section>
   <div class="footer">FarmáciaGest • os dados ficam salvos apenas neste navegador (localStorage). Use “Backup” nas Configurações para exportar.</div>
 </div>
@@ -366,6 +384,9 @@ let CATS = loadLS('fg_cats', [
   {id:'entregador',nome:'Entregador'},
   {id:'caixa',nome:'Operador de Caixa'},
 ]);
+let RECEB  = loadLS('fg_receb',   []); // itens a receber: {id,nome,dist,qtd,recebido,quando,obs,docId,nf}
+let RECDOC = loadLS('fg_recdoc',  []); // documentos lidos: {id,arquivo,dist,nf,data,itens}
+let DIVERG = loadLS('fg_diverg',  []); // divergências: {id,nf,produto,dist,qtd,motivo,nfDev,data,status}
 let MINIMOS = loadLS('fg_minimos', {}); // MINIMOS[turnoId][catId] = n
 function ensureMinimos(){
   TURNOS.forEach(t=>{ if(!MINIMOS[t.id])MINIMOS[t.id]={}; CATS.forEach(c=>{ if(MINIMOS[t.id][c.id]==null)MINIMOS[t.id][c.id]=1; }); });
@@ -374,6 +395,7 @@ ensureMinimos();
 function saveAll(){
   saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
   saveLS('fg_feriados',FERIAS);saveLS('fg_turnos',TURNOS);saveLS('fg_cats',CATS);saveLS('fg_minimos',MINIMOS);
+  saveLS('fg_receb',RECEB);saveLS('fg_recdoc',RECDOC);saveLS('fg_diverg',DIVERG);
 }
 const catName=id=>{const c=CATS.find(c=>c.id===id);return c?c.nome:'Sem categoria';};
 const turnoOf=id=>TURNOS.find(t=>t.id===id)||null;
@@ -435,7 +457,7 @@ function shortages(dateStr){
 
 /* ================= navegação ================= */
 let activeTab='func';
-const TABS=['func','dia','trocas','banco','config'];
+const TABS=['func','dia','trocas','banco','receb','diverg','config'];
 function selectTab(name,focus){
   activeTab=name;
   $$('#tabs button').forEach(x=>{
@@ -479,6 +501,8 @@ function render(){
   else if(activeTab==='dia')renderDia();
   else if(activeTab==='trocas')renderTrocas();
   else if(activeTab==='banco')renderBanco();
+  else if(activeTab==='receb')renderReceb();
+  else if(activeTab==='diverg')renderDiverg();
   else if(activeTab==='config')renderConfig();
 }
 
@@ -550,18 +574,43 @@ const DEMO_FERIADOS=[
   ['09-07','Independência do Brasil'],['10-12','Nossa Senhora Aparecida'],['11-02','Finados'],
   ['11-15','Proclamação da República'],['11-20','Consciência Negra'],['12-25','Natal'],
 ];
+const DEMO_RECEB=[
+  // produto, distribuidora, qtd, já recebido
+  ['Dipirona Sódica 500mg c/10 cpr','Servimed',20,true],
+  ['Amoxicilina 500mg c/21 cáps','Servimed',12,true],
+  ['Losartana Potássica 50mg c/30','Servimed',30,false],
+  ['Soro Fisiológico 0,9% 500ml','Panpharma',24,true],
+  ['Dorflex c/36 cpr','Panpharma',15,false],
+  ['Omeprazol 20mg c/28 cáps','Panpharma',18,false],
+  ['Fralda Geriátrica G pct c/8','Profarma',10,false],
+  ['Álcool em Gel 70% 500ml','Profarma',36,true],
+  ['Vitamina C 1g efervescente','Profarma',12,false],
+  ['Insulina NPH 100UI/ml refil','Santa Cruz',6,false],
+  ['Teste de Glicemia c/50 tiras','Santa Cruz',8,false],
+];
+const DEMO_DIVERG=[
+  // nf, produto, dist, qtd, motivo, nf devolução, status, dias atrás, detalhe
+  ['884512','Dorflex c/36 cpr','Panpharma',3,'Produto avariado','','aberta',4,'3 caixas amassadas no transporte'],
+  ['884512','Omeprazol 20mg c/28 cáps','Panpharma',5,'Faltou (veio a menos)','','aberta',4,'Nota diz 18, chegaram 13'],
+  ['771203','Vitamina C 1g efervescente','Profarma',12,'Validade curta','9911','aberta',9,'Vence em 45 dias'],
+  ['650118','Insulina NPH 100UI/ml refil','Santa Cruz',2,'Fora da temperatura','8842','resolvida',16,'Caixa térmica chegou sem gelo'],
+  ['650118','Teste de Glicemia c/50 tiras','Santa Cruz',1,'Produto não pedido','8843','resolvida',16,''],
+];
 function demoCount(){
   return {
     funcs:  FUNCS.filter(f=>f.demo).length,
     trocas: TROCAS.filter(t=>t.demo).length,
     banco:  BANCO.filter(b=>b.demo).length,
     ferias: FERIAS.filter(h=>h.demo).length,
+    receb:  RECEB.filter(r=>r.demo).length,
+    diverg: DIVERG.filter(d=>d.demo).length,
   };
 }
-function temDemo(){ const d=demoCount(); return d.funcs+d.trocas+d.banco+d.ferias>0; }
+function temDemo(){ const d=demoCount(); return d.funcs+d.trocas+d.banco+d.ferias+d.receb+d.diverg>0; }
 function removeDemo(){
   FUNCS=FUNCS.filter(f=>!f.demo); TROCAS=TROCAS.filter(t=>!t.demo);
   BANCO=BANCO.filter(b=>!b.demo); FERIAS=FERIAS.filter(h=>!h.demo);
+  RECEB=RECEB.filter(r=>!r.demo); RECDOC=RECDOC.filter(x=>!x.demo); DIVERG=DIVERG.filter(d=>!d.demo);
 }
 function seedDemo(){
   const novos=DEMO_PESSOAS.map((p,i)=>{
@@ -579,6 +628,22 @@ function seedDemo(){
             [8,11,[dPlus(4),dPlus(5)],'Fim de semana trocado entre os dois']];
   tr.forEach(t=>{ const a=novos[t[0]],b=novos[t[1]]; if(!a||!b)return;
     TROCAS.push({id:uid(),aId:a.id,bId:b.id,datas:t[2].slice(),obs:t[3],demo:true}); });
+  // recebimento: 3 documentos, itens espalhados entre eles
+  const porDist={};
+  DEMO_RECEB.forEach(r=>{ (porDist[r[1]]=porDist[r[1]]||[]).push(r); });
+  const nfBase={'Servimed':'884231','Panpharma':'884512','Profarma':'771203','Santa Cruz':'650118'};
+  Object.keys(porDist).forEach((dist,i)=>{
+    const docId=uid(), nf=nfBase[dist]||String(700000+i);
+    RECDOC.push({id:docId,arquivo:'NFe-'+nf+'-'+norm(dist).replace(/\s+/g,'')+'.xml',dist,nf,data:dPlus(-(i+1)),itens:porDist[dist].length,demo:true});
+    porDist[dist].forEach(r=>{
+      RECEB.push({id:uid(),nome:r[0],qtd:r[2],dist,nf,docId,recebido:r[3],quando:r[3]?dPlus(-(i+1)):'',obs:'',demo:true});
+    });
+  });
+  // divergências
+  DEMO_DIVERG.forEach(d=>{
+    DIVERG.push({id:uid(),nf:d[0],produto:d[1],dist:d[2],qtd:d[3],motivo:d[4],nfDev:d[5],
+      status:d[6],data:dPlus(-d[7]),obs:d[8],demo:true});
+  });
   // próximos 4 feriados nacionais de data fixa
   const hoje=todayStr(), ano=+hoje.slice(0,4);
   DEMO_FERIADOS.map(h=>{ const d=ano+'-'+h[0]; return {data:d<hoje?((ano+1)+'-'+h[0]):d,nome:h[1]}; })
@@ -1176,6 +1241,533 @@ function renderBanco(){
 }
 
 /* ============================================================
+   ABA: RECEBIMENTO DE MERCADORIA
+   Lê PDF (camada de texto), XML de NF-e, texto/CSV e imagem (OCR),
+   extrai a lista de produtos e mostra para conferência ANTES de
+   importar. O arquivo em si não é guardado — só os itens extraídos,
+   porque o localStorage não comporta PDF/foto.
+   ============================================================ */
+let buscaRec='', filtroRec='todos';
+
+const DISTRIBUIDORAS=['servimed','panpharma','profarma','santa cruz','abc farma','dimed','oncoprod','global farma',
+  'farmarcas','pharmalink','distrimed','sulmed','medcenter','nordeste','farmaconde','uni farma','comercial farmaceutica'];
+
+function carregarScript(src){
+  return new Promise((ok,err)=>{
+    if(document.querySelector('script[data-src="'+src+'"]')){ ok(); return; }
+    const s=document.createElement('script'); s.src=src; s.setAttribute('data-src',src);
+    s.onload=()=>ok(); s.onerror=()=>err(new Error('Não consegui carregar o leitor ('+src.split('/').pop()+'). Verifique a conexão.'));
+    document.head.appendChild(s);
+  });
+}
+
+/* ---------- extração por tipo de arquivo ---------- */
+async function textoDoPDF(file,prog){
+  const base='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+  prog('Carregando o leitor de PDF…');
+  await carregarScript(base+'pdf.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.js';
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  let txt='';
+  for(let i=1;i<=pdf.numPages;i++){
+    prog('Lendo página '+i+' de '+pdf.numPages+'…');
+    const c=await (await pdf.getPage(i)).getTextContent();
+    const linhas={};
+    c.items.forEach(it=>{ const y=Math.round(it.transform[5]); (linhas[y]=linhas[y]||[]).push(it.str); });
+    txt+=Object.keys(linhas).map(Number).sort((a,b)=>b-a).map(y=>linhas[y].join(' ')).join('\n')+'\n';
+  }
+  return txt;
+}
+async function textoDaImagem(file,prog){
+  prog('Carregando o leitor de imagem…');
+  await carregarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+  const r=await Tesseract.recognize(file,'por',{logger:m=>{
+    if(m.status==='recognizing text')prog('Lendo a imagem… '+Math.round((m.progress||0)*100)+'%');
+    else if(String(m.status).indexOf('traineddata')>=0)prog('Baixando o idioma português (só na primeira vez)…');
+  }});
+  return r.data.text||'';
+}
+// NF-e em XML é o caminho exato: nada de heurística
+function itensDoXML(txt){
+  let doc; try{ doc=new DOMParser().parseFromString(txt,'text/xml'); }catch(e){ return null; }
+  if(!doc||doc.getElementsByTagName('parsererror').length)return null;
+  const dets=Array.from(doc.getElementsByTagName('det'));
+  if(!dets.length)return null;
+  const g=(el,t)=>{ const n=el&&el.getElementsByTagName(t)[0]; return n?n.textContent.trim():''; };
+  const emit=doc.getElementsByTagName('emit')[0], ide=doc.getElementsByTagName('ide')[0];
+  const itens=dets.map(d=>{
+    const prod=d.getElementsByTagName('prod')[0]; if(!prod)return null;
+    const nome=g(prod,'xProd'); if(!nome)return null;
+    return {nome,qtd:Math.max(1,Math.round(parseFloat(g(prod,'qCom')||'1'))||1),usar:true};
+  }).filter(Boolean);
+  return {dist:(emit?(g(emit,'xFant')||g(emit,'xNome')):''),nf:(ide?g(ide,'nNF'):''),itens};
+}
+
+/* ---------- heurística para texto solto / PDF / OCR ---------- */
+// linhas de cabeçalho/rodapé que nunca são produto
+const LINHA_LIXO=/^(cnpj|cpf|inscri|i\.?e\.?\b|endere|rua |av\.|avenida|bairro|cep\b|munic|fone|telefone|e-?mail|data\b|emiss|sa[íi]da|total|subtotal|valor|desconto|acr[ée]scimo|frete|seguro|icms|ipi|pis|cofins|base de c|nota fiscal|nf-?e\b|danfe|chave de acesso|protocolo|natureza|destinat|remetente|transportador|placa|peso|volume|observa|informa|vendedor|comprador|cliente|pedido|or[çc]amento|p[áa]gina|pag\b|folha|www\.|http|dados do|recebemos|assinatura|raz[ãa]o social|razao social|filial|dep[óo]sito|condi[çc][ãa]o de pag|forma de pag|banco|duplicata|vencimento)/i;
+// marcadores que denunciam linha de cabeçalho de tabela em qualquer posição
+const CABECALHO=/(c[óo]d(igo)?\b.*descri|descri[çc][ãa]o.*(qtd|quant|un\b|valor)|item\b.*c[óo]d|qtd.*vl\b|quant.*valor unit)/i;
+const UNIDADES='UN|UND|UNID|CX|CAIXA|FR|FRASCO|CT|CP|PC|PCT|AMP|KIT|DZ|TB|BL|GALAO|SC';
+const DOSAGEM=/\d+\s*(mg|mcg|ml|l\b|g\b|ui\b|%)/i;
+const FARMA=/\b(c\/\s*\d+|cpr|comp\b|caps|capsula|drg|amp\b|fr\b|susp|xarope|pomada|creme|gel\b|sol\b|inj|gts|spray|adesivo)\b/i;
+
+// separa uma linha em {nome, qtd}; devolve null quando não parece produto
+function analisaLinha(bruta){
+  const l=String(bruta||'').trim();
+  if(l.length<5)return null;
+  if(LINHA_LIXO.test(l)||CABECALHO.test(l))return null;
+  if(!/[A-Za-zÀ-ÿ]{3,}/.test(l))return null;
+
+  let s=l;
+  s=s.replace(/\b\d{12,14}\b/g,' ');                                  // EAN
+  s=s.replace(/R\$\s*[\d.]*\d[,.]\d{2}/gi,' ');                       // R$ 1.284,00
+  s=s.replace(/\b\d{1,3}(?:\.\d{3})*,\d{2}\b/g,' ');                  // 24,50 / 1.284,00
+  s=s.replace(/\b\d+\.\d{2}\b/g,' ');                                 // 24.50
+
+  // quantidade: aceita "20 CX" e "CX 20"
+  let qtd=null,m;
+  m=s.match(new RegExp('\\b(\\d{1,4})\\s*(?:'+UNIDADES+')\\b','i'));
+  if(m){ qtd=+m[1]; s=s.replace(m[0],' '); }
+  if(qtd===null){
+    m=s.match(new RegExp('\\b(?:'+UNIDADES+')\\s*(\\d{1,4})\\b','i'));
+    if(m){ qtd=+m[1]; s=s.replace(m[0],' '); }
+  }
+  if(qtd===null){ m=s.match(/\bx\s*(\d{1,4})\b/i); if(m){ qtd=+m[1]; s=s.replace(m[0],' '); } }
+
+  s=s.replace(/^\s*\d{1,3}\s*[-.)]?\s+/,'');                          // número do item ("001  ")
+  if(qtd===null){                                                     // inteiro solto sobrando no fim
+    m=s.match(/\s(\d{1,4})\s*$/);
+    if(m){ qtd=+m[1]; s=s.slice(0,m.index); }
+  }
+  s=s.replace(new RegExp('\\b(?:'+UNIDADES+')\\b','gi'),' ')
+     .replace(/\b\d{5,}\b/g,' ')
+     .replace(/[|;]+/g,' ')
+     .replace(/\s{2,}/g,' ')
+     .replace(/^[\s\-–—.:]+|[\s\-–—.:]+$/g,'')
+     .trim();
+
+  if(s.length<4)return null;
+  const palavras=s.split(/\s+/).filter(w=>/[A-Za-zÀ-ÿ]{3,}/.test(w));
+  const temSinalDeProduto=DOSAGEM.test(s)||FARMA.test(s);
+  if(palavras.length<2 && !temSinalDeProduto)return null;             // "Carlos M." cai aqui
+  const letras=(s.match(/[A-Za-zÀ-ÿ]/g)||[]).length;
+  if(letras < s.length*0.4)return null;                               // sobrou mais número que texto
+  return {nome:s,qtd:Math.max(1,qtd||1)};
+}
+
+function itensDoTexto(txt){
+  const itens=[];
+  String(txt||'').split(/\r?\n/).forEach(bruta=>{
+    let linha=bruta.trim(), dist='';
+    // formato explícito "PRODUTO (DISTRIBUIDORA)"
+    const par=linha.match(/^(.+?)\s*\(([^)]{2,40})\)\s*(.*)$/);
+    if(par && /[A-Za-zÀ-ÿ]{3,}/.test(par[2]) && !DOSAGEM.test(par[2])){
+      linha=(par[1]+' '+par[3]).trim(); dist=par[2].trim();
+    }
+    const r=analisaLinha(linha);
+    if(r)itens.push({nome:r.nome,qtd:r.qtd,dist,usar:true});
+  });
+  return itens;
+}
+
+function distDoTexto(txt){
+  const n=norm(txt);
+  const achou=DISTRIBUIDORAS.find(d=>n.indexOf(d)>=0);
+  if(achou)return achou.replace(/\b\w/g,c=>c.toUpperCase());
+  const nf=txt.match(/nota\s*fiscal[^\d]{0,12}(\d{3,12})/i);
+  return nf?'':'';
+}
+function nfDoTexto(txt){
+  const m=txt.match(/(?:nota\s*fiscal|nf-?e?|n[ºo°]\s*)\D{0,8}(\d{3,12})/i);
+  return m?m[1]:'';
+}
+
+/* ---------- modal de progresso ---------- */
+function modalProgresso(titulo){
+  openModal(titulo,'ti-loader','<div id="progTxt" role="status" aria-live="polite" style="font-size:14px;line-height:1.6">Começando…</div>'
+    +'<p class="hint" style="margin:12px 0 0">O arquivo não é enviado para lugar nenhum — a leitura acontece aqui no seu navegador.</p>','');
+  return t=>{ const e=$('#progTxt'); if(e)e.textContent=t; };
+}
+
+/* ---------- ponto de entrada: um arquivo ---------- */
+async function lerDocumento(file){
+  const prog=modalProgresso('Lendo '+file.name);
+  try{
+    const nome=file.name.toLowerCase();
+    let extraido=null, txt='';
+    if(nome.endsWith('.xml')){
+      txt=await file.text(); extraido=itensDoXML(txt);
+      if(!extraido) extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
+    }else if(nome.endsWith('.pdf')){
+      txt=await textoDoPDF(file,prog);
+      if(!txt.trim())throw new Error('Esse PDF não tem texto — provavelmente é digitalizado. Tire uma foto dele e anexe como imagem, ou cole o texto.');
+      extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
+    }else if(/^image\//.test(file.type)||/\.(png|jpe?g|webp|bmp|gif)$/.test(nome)){
+      txt=await textoDaImagem(file,prog);
+      extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
+    }else{
+      txt=await file.text();
+      extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
+    }
+    closeModal();
+    conferirItens(extraido,file.name,txt);
+  }catch(e){
+    closeModal();
+    openModal('Não deu para ler o arquivo','ti-alert-triangle',
+      '<div class="alert danger"><i class="ti ti-alert-triangle" aria-hidden="true"></i><div>'+esc(e.message||'Erro desconhecido')+'</div></div>'
+      +'<p class="hint" style="margin:12px 0 0">Alternativas: use o <b>XML da NF-e</b> (leitura exata), cole o texto do pedido, ou lance os itens manualmente.</p>',
+      '<button class="btn btn-ghost btn-sm" onclick="closeModal()">Fechar</button>');
+  }
+}
+
+/* ---------- conferência antes de importar ---------- */
+let _conf={itens:[],arquivo:'',dist:'',nf:''};
+function conferirItens(ex,arquivo,txtBruto){
+  _conf={itens:(ex&&ex.itens)||[],arquivo:arquivo||'colado',dist:(ex&&ex.dist)||'',nf:(ex&&ex.nf)||'',bruto:txtBruto||''};
+  if(!_conf.itens.length){
+    openModal('Nenhum produto reconhecido','ti-search-off',
+      '<p class="hint" style="margin:0 0 12px">Não achei linhas com cara de produto em <b>'+esc(_conf.arquivo)+'</b>.</p>'
+      +'<p class="hint" style="margin:0 0 12px">Você pode usar cada linha do documento como um produto e apagar o que não servir, ou lançar manualmente.</p>',
+      '<button class="btn btn-ghost btn-sm" id="cfLinhas">Usar cada linha</button><button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancelar</button>');
+    $('#cfLinhas').onclick=()=>{
+      _conf.itens=(_conf.bruto||'').split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length>3).map(l=>({nome:l,qtd:1,dist:'',usar:true}));
+      if(!_conf.itens.length){ toast('O documento veio vazio','err'); closeModal(); return; }
+      closeModal(); conferirItens({itens:_conf.itens,dist:_conf.dist,nf:_conf.nf},_conf.arquivo,_conf.bruto);
+    };
+    return;
+  }
+  let b='<div class="two"><div class="f-wrap"><label class="f" for="cfDist">Distribuidora</label>'
+    +'<input id="cfDist" value="'+esc(_conf.dist)+'" placeholder="ex.: Servimed"></div>'
+    +'<div class="f-wrap"><label class="f" for="cfNF">Nota fiscal (opcional)</label>'
+    +'<input id="cfNF" value="'+esc(_conf.nf)+'" inputmode="numeric" placeholder="ex.: 123456"></div></div>'
+    +'<p class="hint" style="margin:14px 0 8px">Confira antes de importar — desmarque o que não for produto e corrija nomes se precisar. A distribuidora acima vale para os itens que não trouxerem a sua própria.</p>'
+    +'<div class="tbl-wrap" style="max-height:46vh;overflow-y:auto"><table class="mini-tbl"><thead><tr>'
+    +'<th style="width:36px"><span class="sr-only">Incluir</span></th><th>Produto</th><th style="width:74px">Qtd</th></tr></thead><tbody>';
+  _conf.itens.forEach((it,i)=>{
+    b+='<tr><td><input type="checkbox" class="cfUsar" data-i="'+i+'"'+(it.usar?' checked':'')+' aria-label="Incluir '+esc(it.nome)+'"></td>'
+      +'<td><input class="cfNome" data-i="'+i+'" data-dist="'+esc(it.dist||'')+'" value="'+esc(it.nome)+'" aria-label="Nome do produto '+(i+1)+'">'
+      +(it.dist?'<span class="tag gray" style="margin-top:4px">'+esc(it.dist)+'</span>':'')+'</td>'
+      +'<td><input class="cfQtd" data-i="'+i+'" type="number" min="1" value="'+(it.qtd||1)+'" aria-label="Quantidade do produto '+(i+1)+'"></td></tr>';
+  });
+  b+='</tbody></table></div>';
+  openModal('Conferir '+_conf.itens.length+' item(ns) — '+_conf.arquivo,'ti-list-check',b,
+    '<button class="btn btn-ghost btn-sm" id="cfNada" type="button">Desmarcar todos</button>'
+    +'<button class="btn btn-primary btn-sm" id="cfOk" type="button"><i class="ti ti-download" aria-hidden="true"></i> Importar selecionados</button>');
+  $('#cfNada').onclick=()=>{ $$('.cfUsar').forEach(c=>c.checked=false); };
+  $('#cfOk').onclick=()=>{
+    const dist=$('#cfDist').value.trim(), nf=$('#cfNF').value.trim();
+    const escolhidos=[];
+    $$('.cfUsar').forEach(c=>{
+      if(!c.checked)return; const i=c.dataset.i;
+      const campo=$('.cfNome[data-i="'+i+'"]'), nome=campo.value.trim();
+      if(!nome)return;
+      // a distribuidora do próprio item vence a do cabeçalho
+      escolhidos.push({nome,qtd:Math.max(1,+$('.cfQtd[data-i="'+i+'"]').value||1),dist:(campo.dataset.dist||'').trim()});
+    });
+    if(!escolhidos.length){ toast('Selecione ao menos um produto','err'); return; }
+    const docId=uid();
+    RECDOC.push({id:docId,arquivo:_conf.arquivo,dist,nf,data:todayStr(),itens:escolhidos.length});
+    escolhidos.forEach(e=>RECEB.push({id:uid(),nome:e.nome,qtd:e.qtd,dist:e.dist||dist,nf,docId,recebido:false,quando:'',obs:''}));
+    saveAll(); closeModal(); renderReceb();
+    toast(escolhidos.length+' produto(s) na lista de recebimento','ok');
+  };
+}
+
+/* ---------- entrada por texto colado ---------- */
+function colarTextoReceb(){
+  openModal('Colar lista / texto do pedido','ti-clipboard',
+    '<p class="hint" style="margin:0 0 10px">Cole o texto do pedido, do e-mail ou da nota. Uma linha por produto. Se a distribuidora vier entre parênteses no fim da linha, ela é reconhecida sozinha.</p>'
+    +'<div class="f-wrap"><label class="f" for="colTxt">Texto</label><textarea id="colTxt" rows="9" placeholder="DIPIRONA 500MG C/10 (Servimed)&#10;AMOXICILINA 500MG C/21 (Panpharma)&#10;SORO FISIOLOGICO 500ML  x 12"></textarea></div>',
+    '<button class="btn btn-primary btn-sm" id="colOk" type="button"><i class="ti ti-arrow-right" aria-hidden="true"></i> Analisar</button>');
+  $('#colOk').onclick=()=>{
+    const t=$('#colTxt').value;
+    if(!t.trim()){ toast('Cole algum texto','err'); return; }
+    closeModal();
+    conferirItens({dist:distDoTexto(t),nf:nfDoTexto(t),itens:itensDoTexto(t)},'texto colado',t);
+  };
+}
+
+/* ---------- item manual ---------- */
+function itemManual(){
+  const dists=[...new Set(RECEB.map(r=>r.dist).filter(Boolean))];
+  openModal('Adicionar produto','ti-plus',
+    '<div class="f-wrap"><label class="f" for="miNome">Produto</label><input id="miNome" placeholder="ex.: Dipirona 500mg c/10"></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="miDist">Distribuidora</label>'
+    +'<input id="miDist" list="distList" placeholder="ex.: Servimed"><datalist id="distList">'+dists.map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist></div>'
+    +'<div class="f-wrap"><label class="f" for="miQtd">Quantidade</label><input id="miQtd" type="number" min="1" value="1"></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="miNF">Nota fiscal (opcional)</label><input id="miNF" inputmode="numeric"></div>',
+    '<button class="btn btn-primary btn-sm" id="miOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Adicionar</button>');
+  $('#miOk').onclick=()=>{
+    const nome=$('#miNome').value.trim();
+    if(!nome){ toast('Informe o produto','err'); $('#miNome').focus(); return; }
+    RECEB.push({id:uid(),nome,qtd:Math.max(1,+$('#miQtd').value||1),dist:$('#miDist').value.trim(),
+      nf:$('#miNF').value.trim(),docId:'',recebido:false,quando:'',obs:''});
+    saveAll(); closeModal(); renderReceb(); toast('Produto adicionado','ok');
+  };
+}
+
+/* ---------- a aba ---------- */
+function renderReceb(){
+  const el=$('#tab-receb');
+  const total=RECEB.length, ok=RECEB.filter(r=>r.recebido).length, pct=total?Math.round(ok/total*100):0;
+
+  let html='<div class="card"><h2><i class="ti ti-package-import" aria-hidden="true"></i> Entrada de mercadoria</h2>'
+    +'<p class="hint">Anexe a nota, o pedido ou uma foto. O app lê o documento aqui no navegador, lista os produtos para você conferir e depois é só ir marcando o que chegou.</p>'
+    +'<div class="drop" id="recDrop" role="button" tabindex="0" aria-label="Escolher arquivo para ler">'
+    +'<i class="ti ti-cloud-upload" aria-hidden="true"></i><p>Arraste o arquivo aqui ou clique para escolher</p>'
+    +'<small>XML da NF-e (leitura exata) · PDF · imagem/foto · TXT/CSV</small>'
+    +'<input type="file" id="recFile" accept=".xml,.pdf,.txt,.csv,image/*" style="display:none"></div>'
+    +'<div class="row-actions"><button class="btn btn-ghost btn-sm" id="recColar" type="button"><i class="ti ti-clipboard" aria-hidden="true"></i> Colar texto</button>'
+    +'<button class="btn btn-ghost btn-sm" id="recManual" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar produto</button></div>'
+    +'<p class="hint" style="margin:14px 0 0"><b>O que funciona melhor:</b> XML da NF-e sai exato. PDF só é lido se tiver texto (PDF digitalizado não tem). Foto passa por reconhecimento e costuma errar caracteres — por isso a lista sempre aparece para conferência antes de entrar. O arquivo não fica salvo, só os itens.</p>'
+    +'</div>';
+
+  if(total){
+    html+='<div class="card"><h2><i class="ti ti-checkup-list" aria-hidden="true"></i> Lista de recebimento '
+      +'<span class="tag '+(ok===total?'':'gray')+'">'+ok+' de '+total+'</span></h2>'
+      +'<div class="prog" aria-hidden="true"><i style="width:'+pct+'%"></i></div>'
+      +'<p class="hint" style="margin:8px 0 14px">'+(ok===total?'Tudo conferido. ':'Faltam '+(total-ok)+' produto(s) para chegar. ')+'Marque a caixa quando o produto entrar.</p>'
+      +'<div class="search-wrap"><i class="ti ti-search" aria-hidden="true"></i>'
+      +'<input type="text" style="position:absolute;opacity:0;pointer-events:none;height:0" tabindex="-1" aria-hidden="true" autocomplete="username">'
+      +'<label class="sr-only" for="recBusca">Buscar produto</label>'
+      +'<input id="recBusca" type="search" autocomplete="off" placeholder="Buscar produto ou distribuidora…" value="'+esc(buscaRec)+'"></div>'
+      +'<div class="seg" role="group" aria-label="Filtrar itens" style="margin-bottom:14px">'
+      +'<button type="button" class="fRec" data-f="todos" aria-pressed="'+(filtroRec==='todos')+'">Todos</button>'
+      +'<button type="button" class="fRec" data-f="pend" aria-pressed="'+(filtroRec==='pend')+'">Pendentes</button>'
+      +'<button type="button" class="fRec" data-f="ok" aria-pressed="'+(filtroRec==='ok')+'">Recebidos</button></div>';
+
+    const q=norm(buscaRec);
+    let lista=RECEB.filter(r=>{
+      if(filtroRec==='pend'&&r.recebido)return false;
+      if(filtroRec==='ok'&&!r.recebido)return false;
+      if(q&&!(norm(r.nome).includes(q)||norm(r.dist||'').includes(q)||norm(r.nf||'').includes(q)))return false;
+      return true;
+    });
+    if(!lista.length){
+      html+='<div class="empty"><i class="ti ti-search-off" aria-hidden="true"></i>Nenhum produto '
+        +(q?'para “'+esc(buscaRec)+'”':'neste filtro')+'.</div>';
+    }else{
+      // agrupado por distribuidora, que é como a mercadoria chega
+      const grupos={};
+      lista.forEach(r=>{ const k=r.dist||'Sem distribuidora'; (grupos[k]=grupos[k]||[]).push(r); });
+      Object.keys(grupos).sort((a,b)=>a.localeCompare(b)).forEach((g,gi)=>{
+        const arr=grupos[g].sort((a,b)=>a.nome.localeCompare(b.nome));
+        const gok=arr.filter(r=>r.recebido).length;
+        html+='<div style="margin:16px 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<span class="tag c'+(gi%6)+'"><i class="ti ti-truck-delivery" aria-hidden="true"></i> '+esc(g)+'</span>'
+          +'<span class="muted" style="font-size:12px">'+gok+' de '+arr.length+' recebido(s)</span></div>';
+        arr.forEach(r=>{
+          html+='<div class="rec-item'+(r.recebido?' feito':'')+'">'
+            +'<label class="rec-chk"><input type="checkbox" class="recChk" data-id="'+r.id+'"'+(r.recebido?' checked':'')
+            +' aria-label="Marcar '+esc(r.nome)+' como recebido"><span class="sr-only">Recebido</span></label>'
+            +'<div class="rec-nm"><b>'+esc(r.nome)+'</b>'
+            +'<span class="muted">'+(r.dist?'('+esc(r.dist)+')':'(sem distribuidora)')
+            +(r.qtd>1?' · '+r.qtd+' un':'')+(r.nf?' · NF '+esc(r.nf):'')
+            +(r.recebido&&r.quando?' · chegou em '+fmtDateBR(r.quando):'')+'</span></div>'
+            +'<button class="btn btn-ghost btn-sm recDiv" type="button" data-id="'+r.id+'" aria-label="Registrar divergência de '+esc(r.nome)+'" title="Registrar divergência"><i class="ti ti-file-alert" aria-hidden="true"></i></button>'
+            +'<button class="btn btn-danger btn-sm recDel" type="button" data-id="'+r.id+'" aria-label="Remover '+esc(r.nome)+' da lista"><i class="ti ti-trash" aria-hidden="true"></i></button>'
+            +'</div>';
+        });
+      });
+    }
+    html+='<div class="row-actions"><button class="btn btn-ghost btn-sm" id="recLimparOk" type="button"><i class="ti ti-eraser" aria-hidden="true"></i> Limpar recebidos</button></div></div>';
+  }else{
+    html+='<div class="card"><div class="empty"><i class="ti ti-package-off" aria-hidden="true"></i>Nenhum produto na lista ainda.<br>Anexe um documento, cole o texto do pedido ou adicione manualmente.</div></div>';
+  }
+
+  if(RECDOC.length){
+    html+='<div class="card"><h2><i class="ti ti-files" aria-hidden="true"></i> Documentos lidos</h2>'
+      +'<div class="tbl-wrap"><table><thead><tr><th>Arquivo</th><th>Distribuidora</th><th>NF</th><th>Itens</th><th>Data</th><th></th></tr></thead><tbody>';
+    RECDOC.slice().reverse().forEach(d=>{
+      html+='<tr><td>'+esc(d.arquivo)+'</td><td>'+esc(d.dist||'—')+'</td><td class="num">'+esc(d.nf||'—')+'</td>'
+        +'<td class="num">'+d.itens+'</td><td class="num">'+fmtDateBR(d.data)+'</td>'
+        +'<td style="text-align:right"><button class="btn btn-danger btn-sm docDel" type="button" data-id="'+d.id+'" aria-label="Excluir '+esc(d.arquivo)+' e seus itens"><i class="ti ti-trash" aria-hidden="true"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div><p class="hint" style="margin:10px 0 0">Excluir um documento remove também os itens que vieram dele.</p></div>';
+  }
+
+  el.innerHTML=html;
+
+  // ---- ligações
+  const drop=$('#recDrop'), file=$('#recFile');
+  drop.onclick=()=>file.click();
+  drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); file.click(); } };
+  file.onchange=e=>{ if(e.target.files[0])lerDocumento(e.target.files[0]); file.value=''; };
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f)lerDocumento(f); });
+  $('#recColar').onclick=colarTextoReceb;
+  $('#recManual').onclick=itemManual;
+
+  const bs=$('#recBusca');
+  if(bs){
+    bs.oninput=e=>{
+      let v=e.target.value; if(v.includes('@')){ v=''; e.target.value=''; }
+      buscaRec=v; const pos=e.target.selectionStart; renderReceb();
+      const n=$('#recBusca'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(err){} }
+    };
+    bs.onfocus=e=>{ if(e.target.value.includes('@')){ e.target.value=''; buscaRec=''; } };
+  }
+  $$('.fRec').forEach(b=>b.onclick=()=>{ filtroRec=b.dataset.f; renderReceb(); });
+  $$('.recChk').forEach(c=>c.onchange=()=>{
+    const r=RECEB.find(x=>x.id===c.dataset.id); if(!r)return;
+    r.recebido=c.checked; r.quando=c.checked?todayStr():'';
+    saveAll(); renderReceb();
+  });
+  $$('.recDel').forEach(b=>b.onclick=()=>{
+    const r=RECEB.find(x=>x.id===b.dataset.id); if(!r)return;
+    if(!confirm('Remover “'+r.nome+'” da lista de recebimento?'))return;
+    RECEB=RECEB.filter(x=>x.id!==b.dataset.id); saveAll(); renderReceb();
+  });
+  $$('.recDiv').forEach(b=>b.onclick=()=>{
+    const r=RECEB.find(x=>x.id===b.dataset.id); if(!r)return;
+    selectTab('diverg'); formDiverg(null,{nf:r.nf||'',produto:r.nome,dist:r.dist||'',qtd:r.qtd||1});
+  });
+  const lo=$('#recLimparOk');
+  if(lo)lo.onclick=()=>{
+    const n=RECEB.filter(r=>r.recebido).length;
+    if(!n){ toast('Nenhum item recebido ainda'); return; }
+    if(!confirm('Tirar da lista os '+n+' produto(s) já recebidos?'))return;
+    RECEB=RECEB.filter(r=>!r.recebido); saveAll(); renderReceb(); toast(n+' item(ns) removido(s)');
+  };
+  $$('.docDel').forEach(b=>b.onclick=()=>{
+    const d=RECDOC.find(x=>x.id===b.dataset.id); if(!d)return;
+    const n=RECEB.filter(r=>r.docId===d.id).length;
+    if(!confirm('Excluir “'+d.arquivo+'” e os '+n+' item(ns) que vieram dele?'))return;
+    RECEB=RECEB.filter(r=>r.docId!==d.id); RECDOC=RECDOC.filter(x=>x.id!==d.id);
+    saveAll(); renderReceb();
+  });
+}
+
+/* ============================================================
+   ABA: DIVERGÊNCIAS / PENDÊNCIAS DE NOTA FISCAL
+   ============================================================ */
+let buscaDiv='', filtroDiv='abertas';
+const MOTIVOS=['Produto avariado','Validade curta','Produto vencido','Produto trocado','Veio a mais',
+  'Faltou (veio a menos)','Preço divergente','Produto não pedido','Embalagem violada','Fora da temperatura','Outro'];
+
+function formDiverg(id,pre){
+  const d=id?DIVERG.find(x=>x.id===id):null;
+  const v=d||pre||{};
+  const dists=[...new Set(RECEB.concat(DIVERG.map(x=>({dist:x.dist}))).map(r=>r.dist).filter(Boolean))];
+  openModal(d?'Editar divergência':'Registrar divergência','ti-file-alert',
+    '<div class="two"><div class="f-wrap"><label class="f" for="dvNF">Nota fiscal *</label>'
+    +'<input id="dvNF" inputmode="numeric" value="'+esc(v.nf||'')+'" placeholder="ex.: 123456"></div>'
+    +'<div class="f-wrap"><label class="f" for="dvDist">Distribuidora</label>'
+    +'<input id="dvDist" list="dvDistList" value="'+esc(v.dist||'')+'" placeholder="ex.: Servimed">'
+    +'<datalist id="dvDistList">'+dists.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="dvProd">Produto *</label>'
+    +'<input id="dvProd" value="'+esc(v.produto||'')+'" placeholder="ex.: Dipirona 500mg c/10"></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="dvQtd">Quantidade</label>'
+    +'<input id="dvQtd" type="number" min="1" value="'+(v.qtd||1)+'"></div>'
+    +'<div class="f-wrap"><label class="f" for="dvMotivo">Motivo da devolução *</label><select id="dvMotivo">'
+    +MOTIVOS.map(m=>'<option'+((v.motivo===m)?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="dvObs">Detalhe (opcional)</label>'
+    +'<input id="dvObs" value="'+esc(v.obs||'')+'" placeholder="ex.: 3 caixas amassadas, lote 4471"></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="dvNFDev">NF de devolução</label>'
+    +'<input id="dvNFDev" inputmode="numeric" value="'+esc(v.nfDev||'')+'" placeholder="deixe vazio até emitir"></div>'
+    +'<div class="f-wrap"><label class="f" for="dvStatus">Situação</label><select id="dvStatus">'
+    +'<option value="aberta"'+((v.status||'aberta')==='aberta'?' selected':'')+'>Em aberto</option>'
+    +'<option value="resolvida"'+(v.status==='resolvida'?' selected':'')+'>Resolvida</option></select></div></div>',
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-primary btn-sm" id="dvOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Salvar</button>');
+  $('#dvOk').onclick=()=>{
+    const nf=$('#dvNF').value.trim(), produto=$('#dvProd').value.trim();
+    if(!nf){ toast('Informe a nota fiscal','err'); $('#dvNF').focus(); return; }
+    if(!produto){ toast('Informe o produto','err'); $('#dvProd').focus(); return; }
+    const dados={nf,produto,dist:$('#dvDist').value.trim(),qtd:Math.max(1,+$('#dvQtd').value||1),
+      motivo:$('#dvMotivo').value,obs:$('#dvObs').value.trim(),nfDev:$('#dvNFDev').value.trim(),
+      status:$('#dvStatus').value};
+    if(d)Object.assign(d,dados);
+    else DIVERG.push(Object.assign({id:uid(),data:todayStr()},dados));
+    saveAll(); closeModal(); selectTab('diverg'); toast(d?'Divergência atualizada':'Divergência registrada','ok');
+  };
+}
+
+function renderDiverg(){
+  const el=$('#tab-diverg');
+  const abertas=DIVERG.filter(d=>d.status!=='resolvida').length;
+  const semNF=DIVERG.filter(d=>d.status!=='resolvida'&&!d.nfDev).length;
+
+  let html='<div class="card"><h2><i class="ti ti-file-alert" aria-hidden="true"></i> Divergências de nota fiscal</h2>'
+    +'<p class="hint">Registre o que veio errado: a nota que chegou, o produto, o motivo e — quando emitir — a nota fiscal de devolução.</p>'
+    +'<div class="row-actions" style="margin-top:0"><button class="btn btn-primary btn-sm" id="dvNovo" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Registrar divergência</button></div>';
+  if(DIVERG.length){
+    html+='<div class="stats">'
+      +'<div class="stat'+(abertas?' bad':'')+'"><div class="v">'+abertas+'</div><div class="k"><i class="ti ti-alert-circle" aria-hidden="true"></i> Em aberto</div></div>'
+      +'<div class="stat"><div class="v">'+semNF+'</div><div class="k"><i class="ti ti-file-off" aria-hidden="true"></i> Sem NF de devolução</div></div>'
+      +'<div class="stat good"><div class="v">'+(DIVERG.length-abertas)+'</div><div class="k"><i class="ti ti-circle-check" aria-hidden="true"></i> Resolvidas</div></div>'
+      +'</div>';
+  }
+  html+='</div>';
+
+  if(!DIVERG.length){
+    html+='<div class="card"><div class="empty"><i class="ti ti-mood-check" aria-hidden="true"></i>Nenhuma divergência registrada.<br>Quando algo vier errado na nota, registre aqui para não perder o prazo da devolução.</div></div>';
+    el.innerHTML=html; $('#dvNovo').onclick=()=>formDiverg(null); return;
+  }
+
+  html+='<div class="card"><h2><i class="ti ti-list-search" aria-hidden="true"></i> Registros</h2>'
+    +'<div class="search-wrap"><i class="ti ti-search" aria-hidden="true"></i>'
+    +'<input type="text" style="position:absolute;opacity:0;pointer-events:none;height:0" tabindex="-1" aria-hidden="true" autocomplete="username">'
+    +'<label class="sr-only" for="dvBusca">Buscar divergência</label>'
+    +'<input id="dvBusca" type="search" autocomplete="off" placeholder="Buscar por nota, produto, distribuidora ou motivo…" value="'+esc(buscaDiv)+'"></div>'
+    +'<div class="seg" role="group" aria-label="Filtrar divergências" style="margin-bottom:14px">'
+    +'<button type="button" class="fDiv" data-f="abertas" aria-pressed="'+(filtroDiv==='abertas')+'">Em aberto</button>'
+    +'<button type="button" class="fDiv" data-f="resolvidas" aria-pressed="'+(filtroDiv==='resolvidas')+'">Resolvidas</button>'
+    +'<button type="button" class="fDiv" data-f="todas" aria-pressed="'+(filtroDiv==='todas')+'">Todas</button></div>';
+
+  const q=norm(buscaDiv);
+  const lista=DIVERG.filter(d=>{
+    if(filtroDiv==='abertas'&&d.status==='resolvida')return false;
+    if(filtroDiv==='resolvidas'&&d.status!=='resolvida')return false;
+    if(q&&!(norm(d.produto).includes(q)||norm(d.nf).includes(q)||norm(d.dist||'').includes(q)
+      ||norm(d.motivo||'').includes(q)||norm(d.nfDev||'').includes(q)))return false;
+    return true;
+  }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+
+  if(!lista.length){
+    html+='<div class="empty"><i class="ti ti-search-off" aria-hidden="true"></i>Nada encontrado neste filtro.</div>';
+  }else{
+    html+='<div class="tbl-wrap"><table><thead><tr><th>NF</th><th>Produto</th><th>Motivo</th><th>NF devolução</th><th>Situação</th><th></th></tr></thead><tbody>';
+    lista.forEach(d=>{
+      html+='<tr><td class="num"><b>'+esc(d.nf)+'</b>'+(d.dist?'<br><span class="muted" style="font-size:11.5px">'+esc(d.dist)+'</span>':'')+'</td>'
+        +'<td>'+esc(d.produto)+(d.qtd>1?' <span class="muted">· '+d.qtd+' un</span>':'')
+        +(d.obs?'<br><span class="muted" style="font-size:11.5px">'+esc(d.obs)+'</span>':'')+'</td>'
+        +'<td><span class="tag troca">'+esc(d.motivo||'—')+'</span></td>'
+        +'<td class="num">'+(d.nfDev?esc(d.nfDev):'<span class="muted">a emitir</span>')+'</td>'
+        +'<td>'+(d.status==='resolvida'
+            ?'<span class="tag"><i class="ti ti-circle-check" aria-hidden="true"></i> Resolvida</span>'
+            :'<span class="tag folga"><i class="ti ti-alert-circle" aria-hidden="true"></i> Em aberto</span>')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'
+        +'<button class="btn btn-ghost btn-sm dvEdit" type="button" data-id="'+d.id+'" aria-label="Editar divergência da NF '+esc(d.nf)+'"><i class="ti ti-pencil" aria-hidden="true"></i></button> '
+        +'<button class="btn btn-danger btn-sm dvDel" type="button" data-id="'+d.id+'" aria-label="Excluir divergência da NF '+esc(d.nf)+'"><i class="ti ti-trash" aria-hidden="true"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+
+  $('#dvNovo').onclick=()=>formDiverg(null);
+  const bs=$('#dvBusca');
+  if(bs){
+    bs.oninput=e=>{
+      let v=e.target.value; if(v.includes('@')){ v=''; e.target.value=''; }
+      buscaDiv=v; const pos=e.target.selectionStart; renderDiverg();
+      const n=$('#dvBusca'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(err){} }
+    };
+    bs.onfocus=e=>{ if(e.target.value.includes('@')){ e.target.value=''; buscaDiv=''; } };
+  }
+  $$('.fDiv').forEach(b=>b.onclick=()=>{ filtroDiv=b.dataset.f; renderDiverg(); });
+  $$('.dvEdit').forEach(b=>b.onclick=()=>formDiverg(b.dataset.id));
+  $$('.dvDel').forEach(b=>b.onclick=()=>{
+    const d=DIVERG.find(x=>x.id===b.dataset.id); if(!d)return;
+    if(!confirm('Excluir a divergência da NF '+d.nf+' ('+d.produto+')?'))return;
+    DIVERG=DIVERG.filter(x=>x.id!==b.dataset.id); saveAll(); renderDiverg();
+  });
+}
+
+/* ============================================================
    ABA: CONFIGURAÇÕES
    ============================================================ */
 function renderConfig(){
@@ -1224,10 +1816,10 @@ function renderConfig(){
   // backup
   const dc=demoCount(), temD=temDemo();
   html+='<div class="card"><h2><i class="ti ti-flask"></i> Banco de dados de teste</h2>'
-    +'<p class="hint">Cria uma farmácia fictícia completa — 12 funcionários nos 3 turnos, folgas, trocas, lançamentos de banco de horas e os próximos feriados — para você experimentar o app com a tela cheia. Tudo que nasce aqui fica marcado como <span class="tag gray">teste</span> e sai de uma vez só; seus dados reais não são tocados.</p>'
+    +'<p class="hint">Cria uma farmácia fictícia completa — 12 funcionários nos 3 turnos, folgas, trocas, lançamentos de banco de horas, feriados, uma lista de recebimento com 4 distribuidoras e divergências de nota — para você experimentar o app com a tela cheia. Tudo que nasce aqui fica marcado como <span class="tag gray">teste</span> e sai de uma vez só; seus dados reais não são tocados.</p>'
     +'<div class="row-actions" style="margin-top:0"><button class="btn btn-primary btn-sm" id="demoSeed"><i class="ti ti-database-plus"></i> '+(temD?'Recriar banco de teste':'Criar banco de teste')+'</button>'
     +(temD?'<button class="btn btn-danger btn-sm" id="demoClear"><i class="ti ti-database-off"></i> Remover dados de teste</button>':'')+'</div>'
-    +(temD?('<p class="hint" style="margin:14px 0 0">No app agora: <b>'+dc.funcs+'</b> funcionário(s), <b>'+dc.trocas+'</b> troca(s), <b>'+dc.banco+'</b> lançamento(s) e <b>'+dc.ferias+'</b> feriado(s) de teste.</p>'):'')
+    +(temD?('<p class="hint" style="margin:14px 0 0">No app agora: <b>'+dc.funcs+'</b> funcionário(s), <b>'+dc.trocas+'</b> troca(s), <b>'+dc.banco+'</b> lançamento(s), <b>'+dc.ferias+'</b> feriado(s), <b>'+dc.receb+'</b> item(ns) de recebimento e <b>'+dc.diverg+'</b> divergência(s) de teste.</p>'):'')
     +'</div>';
 
   html+='<div class="card"><h2><i class="ti ti-database"></i> Backup dos dados</h2><p class="hint">Exporte tudo para um arquivo (guarde como cópia de segurança) ou restaure de um arquivo salvo.</p>'
@@ -1263,20 +1855,20 @@ function renderConfig(){
   };
   if($('#demoClear'))$('#demoClear').onclick=()=>{
     const d=demoCount();
-    if(!confirm('Remover os dados de teste ('+d.funcs+' funcionário(s), '+d.trocas+' troca(s), '+d.banco+' lançamento(s), '+d.ferias+' feriado(s))?\n\nSeus dados reais permanecem.'))return;
+    if(!confirm('Remover os dados de teste ('+d.funcs+' funcionário(s), '+d.trocas+' troca(s), '+d.banco+' lançamento(s), '+d.ferias+' feriado(s), '+d.receb+' item(ns) de recebimento, '+d.diverg+' divergência(s))?\n\nSeus dados reais permanecem.'))return;
     removeDemo(); saveAll(); renderConfig(); toast('Dados de teste removidos');
   };
 
   $('#bkExport').onclick=()=>{
-    const data={v:1,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS};
+    const data={v:2,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='farmaciagest-backup.json'; a.click(); URL.revokeObjectURL(a.href);
   };
   $('#bkImport').onclick=()=>$('#bkFile').click();
   $('#bkFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result);
-    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos;
+    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg;
     ensureMinimos(); saveAll(); render(); toast('Dados importados','ok'); }catch(err){ toast('Arquivo inválido','err'); } }; r.readAsText(f); e.target.value=''; };
-  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[]; saveAll(); render(); toast('Dados apagados'); } };
+  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[]; saveAll(); render(); toast('Dados apagados'); } };
 }
 
 /* ================= start ================= */
