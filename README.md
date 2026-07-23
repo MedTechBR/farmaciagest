@@ -10,7 +10,22 @@ Gestão de escala, trocas e banco de horas da farmácia. App de página única (
 - **Escala** — em dois modos: **Dia** (quem trabalha em cada turno, folgas, trocas, matriz de cobertura mínima e resumo do dia) e **Semana** (os 7 dias lado a lado, com marcação de desfalque e feriado; clicar num dia abre a escala completa dele). Botão **Imprimir** com folha de estilo própria para colar no balcão.
 - **Trocas** — registro de trocas de plantão entre funcionários.
 - **Banco de horas** — saldo positivo/negativo por funcionário.
+- **Recebimento** — entrada de mercadoria: anexa documento, lista os produtos com a distribuidora entre parênteses, busca, filtros e caixa para marcar o que chegou (ver abaixo).
+- **Divergências** — pendências de nota fiscal: nota, produto, distribuidora, quantidade, motivo da devolução, NF de devolução e situação. Dá para abrir já preenchido a partir de um item do recebimento.
 - **Configurações** — mínimos por turno/categoria, turnos, categorias, feriados, backup (exportar/importar) e **banco de dados de teste**.
+
+## Leitura de documentos no recebimento
+
+Tudo é processado no próprio navegador — nenhum arquivo sai do aparelho. O documento **não fica salvo** (localStorage não comporta PDF nem foto); só os itens extraídos.
+
+| Formato | Como é lido | Confiabilidade |
+|---|---|---|
+| **XML da NF-e** | `DOMParser` nos campos `xProd`/`qCom`/`emit` | Exata — é o formato recomendado |
+| **PDF** | camada de texto via pdf.js (carregado sob demanda) | Boa em PDF digital; PDF digitalizado não tem texto e é recusado com aviso |
+| **Imagem/foto** | OCR via tesseract.js em português (carregado sob demanda) | Aproximada — erra caracteres (num teste, `C/36` virou `C/86`) |
+| **TXT/CSV/texto colado** | heurística de linha | Boa em lista e tabela de pedido |
+
+Por isso **toda** extração passa por uma tela de conferência editável antes de entrar na lista: dá para desmarcar linhas, corrigir nome e ajustar quantidade. A heurística descarta cabeçalho, rodapé, totais e razão social, e entende quantidade nas duas ordens (`CX 20` e `20 CX`).
 
 ## Banco de dados de teste
 
