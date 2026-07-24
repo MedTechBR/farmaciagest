@@ -1515,11 +1515,19 @@ function folgasFixas(f,mes,ano){
   return out;
 }
 function cadastrarFuncsDoMes(mes){
+  // turno mais usado por função — serve de padrão para quem passou o mês de férias
+  const porFuncao={};
+  mes.funcs.forEach(f=>{
+    const t=tallyFunc(f), k=f.func||'';
+    porFuncao[k]=porFuncao[k]||{};
+    Object.keys(t.turnos).forEach(c=>{ porFuncao[k][c]=(porFuncao[k][c]||0)+t.turnos[c]; });
+  });
+  const maisUsado=k=>{ const o=porFuncao[k]||{}; return Object.keys(o).sort((a,b)=>o[b]-o[a])[0]||''; };
   const prev=[];
   mes.funcs.forEach(f=>{
     const t=tallyFunc(f);
     const cods=Object.keys(t.turnos).sort((a,b)=>t.turnos[b]-t.turnos[a]);
-    const principal=cods[0]||'';
+    const principal=cods[0]||maisUsado(f.func||'');
     const existe=FUNCS.find(x=>norm(x.nome)===norm(f.nome));
     prev.push({f,t,principal,folgas:folgasFixas(f,mes.mesNum,mes.ano),existe:!!existe});
   });
@@ -1533,7 +1541,9 @@ function cadastrarFuncsDoMes(mes){
     body+='<tr><td><input type="checkbox" class="cdUsar" data-i="'+i+'" checked aria-label="Cadastrar '+esc(p.f.nome)+'"></td>'
       +'<td>'+esc(p.f.nome)+(p.existe?' <span class="tag gray">já existe</span>':'')+'</td>'
       +'<td>'+esc(p.f.func||'—')+'</td>'
-      +'<td>'+(p.principal?esc(p.principal)+' <span class="muted">'+(HTIMES[p.principal]||'')+'</span>':'<span class="muted">sem turno (férias)</span>')+'</td>'
+      +'<td>'+(p.principal?esc(p.principal)+' <span class="muted">'+(HTIMES[p.principal]||'')+'</span>'
+          +(Object.keys(p.t.turnos).length?'':' <span class="tag gray">de férias — turno da função</span>')
+        :'<span class="muted">—</span>')+'</td>'
       +'<td>'+(p.folgas.length?p.folgas.map(d=>DOW_S[d]).join(', '):'<span class="muted">—</span>')+'</td></tr>';
   });
   body+='</tbody></table></div>';
