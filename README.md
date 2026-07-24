@@ -22,9 +22,14 @@ Tudo é processado no próprio navegador — nenhum arquivo sai do aparelho. O d
 | Formato | Como é lido | Confiabilidade |
 |---|---|---|
 | **XML da NF-e** | `DOMParser` nos campos `xProd`/`qCom`/`emit` | Exata — é o formato recomendado |
+| **Excel** (`.xlsx`/`.xlsb`/`.xls`) | acha as colunas por cabeçalho (produto, quantidade, distribuidora, nota) | Exata quando há coluna de produto |
 | **PDF** | camada de texto via pdf.js (carregado sob demanda) | Boa em PDF digital; PDF digitalizado não tem texto e é recusado com aviso |
-| **Imagem/foto** | OCR via tesseract.js em português (carregado sob demanda) | Aproximada — erra caracteres (num teste, `C/36` virou `C/86`) |
+| **Imagem/foto** | correção de iluminação + OCR via tesseract.js (carregado sob demanda) | Aproximada — erra caracteres (num teste, `C/36` virou `C/86`) |
 | **TXT/CSV/texto colado** | heurística de linha | Boa em lista e tabela de pedido |
+
+Na coluna de produto do Excel, a escolha não é só pelo rótulo: a coluna candidata precisa ter texto de verdade nas linhas abaixo (senão uma coluna "Item", que só tem o número da linha, seria confundida com o produto).
+
+Para foto, cada pixel é dividido pela iluminação local antes do OCR, o que achata sombra sem apagar a letra. Medi as alternativas na mesma foto: ampliar 3× produziu texto sem sentido e binarizar fragmentou as letras — por isso nenhuma das duas é usada. A correção de iluminação recuperou quantidades que antes se perdiam (`UN 24`, `CX 18`).
 
 Por isso **toda** extração passa por uma tela de conferência editável antes de entrar na lista: dá para desmarcar linhas, corrigir nome e ajustar quantidade. A heurística descarta cabeçalho, rodapé, totais e razão social, e entende quantidade nas duas ordens (`CX 20` e `20 CX`).
 
