@@ -12,6 +12,7 @@ Gestão de escala, trocas e banco de horas da farmácia. App de página única (
 - **Banco de horas** — saldo positivo/negativo por funcionário.
 - **Recebimento** — entrada de mercadoria: anexa documento, lista os produtos com a distribuidora entre parênteses, busca, filtros e caixa para marcar o que chegou (ver abaixo).
 - **Divergências** — pendências de nota fiscal: nota, produto, distribuidora, quantidade, motivo da devolução, NF de devolução e situação. Dá para abrir já preenchido a partir de um item do recebimento.
+- **Escala mensal** — importa a planilha de escala que a farmácia já usa (grade funcionário × dia) e gera a contagem de turnos por pessoa (ver abaixo).
 - **Configurações** — mínimos por turno/categoria, turnos, categorias, feriados, backup (exportar/importar) e **banco de dados de teste**.
 
 ## Leitura de documentos no recebimento
@@ -50,3 +51,19 @@ Acessibilidade: abas são um `tablist` real (setas/Home/End), modal com `role="d
 ## Stack
 
 HTML/CSS/JS vanilla em arquivo único. Via CDN: [Inter](https://fonts.google.com/specimen/Inter), [Tabler Icons](https://tabler.io/icons) e [SheetJS](https://sheetjs.com/) (leitura/escrita de planilhas).
+
+## Escala mensal (importar a planilha existente)
+
+A aba lê a planilha no formato que a farmácia já usa — uma linha por funcionário, os dias do mês nas colunas — sem exigir modelo novo. Códigos reconhecidos:
+
+| Código | Significado |
+|---|---|
+| `H01`–`H09` | turno trabalhado (H01 06:50–14:40, H02 08:10–16:00, H03 10:10–18:00, H04 12:10–20:00, H05 13:10–21:00, H06 14:30–22:20, H07 15:30–23:20, H08 09:00–13:00 / 15:00–19:00, H09 09:30–19:20) |
+| `F` | folga |
+| `*` | domingo escalado para trabalhar |
+| células que soletram `F-É-R-I-A-S` | férias |
+| `FF` / `FA` | folga de feriado / de aniversário |
+
+**Por que não depende da cor:** o SheetJS (leitor de planilha no navegador) não expõe o preenchimento das células. A classificação é feita pelo conteúdo, e foi conferida contra as cores reais do arquivo (amarelo = folga/domingo, verde = férias): **as duas classificações coincidem em 100% das células dos 21 funcionários de agosto/2026**. O bloco de férias é distinguido de uma folga isolada por ser uma sequência de 3+ letras de `FÉRIAS`.
+
+Saídas: grade colorida do mês, **contagem por funcionário** (quantos dias em cada turno, folgas, domingos, férias, dias trabalhados), export CSV e o botão **Cadastrar funcionários**, que cria as pessoas na aba Funcionários com a função da planilha e o turno em que cada uma mais trabalhou. Folga fixa só é atribuída quando cai no mesmo dia da semana 3+ vezes — nessa escala a folga é rodiziada.
