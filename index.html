@@ -241,6 +241,10 @@ tr:last-child td{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
 
+/* selo de pendência na aba */
+.tab-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;
+  border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;line-height:1}
+
 /* marcador de troca na escala do dia */
 .troca-mark{background:var(--warn-soft);color:var(--warn);border:1px solid #fde68a;border-radius:var(--r1);
   font-weight:900;font-size:15px;line-height:1;margin-left:6px;cursor:pointer;font-family:inherit;
@@ -376,6 +380,7 @@ table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;whit
   <button data-tab="mensal" role="tab" aria-selected="false" aria-controls="tab-mensal" id="tb-mensal" tabindex="-1"><i class="ti ti-calendar-month" aria-hidden="true"></i> Escala mensal</button>
   <button data-tab="receb" role="tab" aria-selected="false" aria-controls="tab-receb" id="tb-receb" tabindex="-1"><i class="ti ti-package-import" aria-hidden="true"></i> Recebimento</button>
   <button data-tab="diverg" role="tab" aria-selected="false" aria-controls="tab-diverg" id="tb-diverg" tabindex="-1"><i class="ti ti-file-alert" aria-hidden="true"></i> Divergências</button>
+  <button data-tab="validade" role="tab" aria-selected="false" aria-controls="tab-validade" id="tb-validade" tabindex="-1"><i class="ti ti-calendar-exclamation" aria-hidden="true"></i> Validade</button>
   <button data-tab="config" role="tab" aria-selected="false" aria-controls="tab-config" id="tb-config" tabindex="-1"><i class="ti ti-settings" aria-hidden="true"></i> Configurações</button>
 </nav>
 <div class="wrap">
@@ -386,6 +391,7 @@ table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;whit
   <section id="tab-mensal" role="tabpanel" aria-labelledby="tb-mensal" tabindex="-1" style="display:none"></section>
   <section id="tab-receb" role="tabpanel" aria-labelledby="tb-receb" tabindex="-1" style="display:none"></section>
   <section id="tab-diverg" role="tabpanel" aria-labelledby="tb-diverg" tabindex="-1" style="display:none"></section>
+  <section id="tab-validade" role="tabpanel" aria-labelledby="tb-validade" tabindex="-1" style="display:none"></section>
   <section id="tab-config" role="tabpanel" aria-labelledby="tb-config" tabindex="-1" style="display:none"></section>
   <div class="footer">FarmáciaGest <span class="muted num" id="verTag"></span> • os dados ficam salvos apenas neste navegador (localStorage). Use “Backup” nas Configurações para exportar.</div>
 </div>
@@ -431,7 +437,9 @@ let CATS = loadLS('fg_cats', [
 let MENSAL = loadLS('fg_mensal',  []); // escalas mensais importadas do Excel
 let RECEB  = loadLS('fg_receb',   []); // itens a receber: {id,nome,dist,qtd,recebido,quando,obs,docId,nf}
 let RECDOC = loadLS('fg_recdoc',  []); // documentos lidos: {id,arquivo,dist,nf,data,itens}
-let DIVERG = loadLS('fg_diverg',  []); // divergências: {id,nf,produto,dist,qtd,motivo,nfDev,data,status}
+let DIVERG = loadLS('fg_diverg',  []); // divergências: {id,nf,produto,dist,qtd,motivo,nfDev,data,status,lote,ean}
+let VALIDADE=loadLS('fg_validade',[]); // vencimentos: {id,nome,venc,qtd,lote,ean,dist,local,obs,resolvido}
+let VALCFG  =loadLS('fg_valcfg',{dias:45,notificar:false,ultimoAviso:''});
 let MINIMOS = loadLS('fg_minimos', {}); // MINIMOS[turnoId][catId] = n
 function ensureMinimos(){
   TURNOS.forEach(t=>{ if(!MINIMOS[t.id])MINIMOS[t.id]={}; CATS.forEach(c=>{ if(MINIMOS[t.id][c.id]==null)MINIMOS[t.id][c.id]=1; }); });
@@ -441,6 +449,7 @@ function saveAll(){
   saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
   saveLS('fg_feriados',FERIAS);saveLS('fg_turnos',TURNOS);saveLS('fg_cats',CATS);saveLS('fg_minimos',MINIMOS);
   saveLS('fg_receb',RECEB);saveLS('fg_recdoc',RECDOC);saveLS('fg_diverg',DIVERG);saveLS('fg_mensal',MENSAL);
+  saveLS('fg_validade',VALIDADE);saveLS('fg_valcfg',VALCFG);
 }
 const catName=id=>{const c=CATS.find(c=>c.id===id);return c?c.nome:'Sem categoria';};
 const turnoOf=id=>TURNOS.find(t=>t.id===id)||null;
@@ -524,8 +533,29 @@ function baseSchedule(f,dateStr){
 function daySchedule(dateStr){
   const map={};
   FUNCS.forEach(f=>{ map[f.id]=baseSchedule(f,dateStr); });
-  // aplicar trocas (troca de horário/escala entre A e B naquele dia)
-  TROCAS.filter(t=>(t.datas||[]).includes(dateStr)).forEach(t=>{
+  /* Troca por DIAS DIFERENTES: "trocou o dia 01 pelo dia 07".
+     No dia de A, quem trabalha é B (com a escala que era de A) e A folga;
+     no dia de B, o inverso. */
+  TROCAS.filter(t=>t.cruzada).forEach(t=>{
+    const ehDiaA=(t.datas||[]).includes(dateStr), ehDiaB=(t.datasB||[]).includes(dateStr);
+    if(!ehDiaA&&!ehDiaB)return;
+    const cede = ehDiaA ? t.aId : t.bId;          // quem estava escalado nesse dia
+    const cobre= ehDiaA ? t.bId : t.aId;          // quem assume o dia
+    const orig=map[cede], destino=map[cobre];
+    if(!orig||!destino)return;
+    map[cobre]={status:orig.status,turnoId:orig.turnoId,entrada:orig.entrada,saida:orig.saida,
+      motivo:orig.motivo,cod:orig.cod,fonte:orig.fonte,
+      trocaCom:cede,trocaObs:t.obs,trocaId:t.id,cruzada:true,assumiu:true,
+      eraTurno:destino.turnoId,eraCod:destino.cod,eraStatus:destino.status,eraEntrada:destino.entrada,eraSaida:destino.saida,
+      outroDia:(ehDiaA?(t.datasB||[])[0]:(t.datas||[])[0])};
+    map[cede]={status:'folga',motivo:'Trocou este dia',turnoId:orig.turnoId,entrada:orig.entrada,saida:orig.saida,
+      cod:orig.cod,fonte:orig.fonte,
+      trocaCom:cobre,trocaObs:t.obs,trocaId:t.id,cruzada:true,assumiu:false,
+      eraTurno:orig.turnoId,eraCod:orig.cod,eraStatus:orig.status,eraEntrada:orig.entrada,eraSaida:orig.saida,
+      outroDia:(ehDiaA?(t.datasB||[])[0]:(t.datas||[])[0])};
+  });
+  // aplicar trocas de horário no MESMO dia (A e B invertem a escala entre si)
+  TROCAS.filter(t=>!t.cruzada&&(t.datas||[]).includes(dateStr)).forEach(t=>{
     const a=map[t.aId], b=map[t.bId];
     if(!a||!b)return;
     const na={status:b.status,turnoId:b.turnoId,entrada:b.entrada,saida:b.saida,motivo:b.motivo,cod:b.cod,fonte:a.fonte,
@@ -558,7 +588,7 @@ function shortages(dateStr){
 
 /* ================= navegação ================= */
 let activeTab='func';
-const TABS=['func','dia','trocas','banco','mensal','receb','diverg','config'];
+const TABS=['func','dia','trocas','banco','mensal','receb','diverg','validade','config'];
 function selectTab(name,focus){
   activeTab=name;
   $$('#tabs button').forEach(x=>{
@@ -597,7 +627,8 @@ $('#themeBtn').onclick=()=>{
   TEMA = escuro?'light':'dark';
   saveLS('fg_tema',TEMA); applyTheme(TEMA);
 };
-const APP_VER='2026.07.24-6';
+let trocaCruzada=false;   // modo do formulário de troca
+const APP_VER='2026.07.24-7';
 function render(){ try{ renderInterno(); }catch(e){ falhaNaTela(e); } }
 function falhaNaTela(e){
   const el=$('#tab-'+activeTab); if(!el)return;
@@ -621,6 +652,7 @@ function renderInterno(){
   else if(activeTab==='mensal')renderMensal();
   else if(activeTab==='receb')renderReceb();
   else if(activeTab==='diverg')renderDiverg();
+  else if(activeTab==='validade')renderValidade();
   else if(activeTab==='config')renderConfig();
 }
 
@@ -1158,10 +1190,18 @@ function detalheTroca(funcId,dia){
   const antes=desc({status:s.eraStatus,cod:s.eraCod,entrada:s.eraEntrada,saida:s.eraSaida,motivo:s.motivo});
   const agora=desc(s);
   let b='<div class="alert info"><i class="ti ti-arrows-exchange" aria-hidden="true"></i><div>'
-    +'<b>'+esc(f.nome)+'</b> trocou com <b>'+esc(o?o.nome:'?')+'</b> em '+esc(fmtDateLong(dia))+'.</div></div>'
-    +'<div class="kv"><span class="k">Escala original</span><span class="v">'+esc(antes)+'</span></div>'
-    +'<div class="kv"><span class="k">Passou a fazer</span><span class="v">'+esc(agora)+'</span></div>'
-    +'<div class="kv"><span class="k">Trocou com</span><span class="v">'+esc(o?o.nome:'?')+'</span></div>';
+    +'<b>'+esc(f.nome)+'</b> trocou com <b>'+esc(o?o.nome:'?')+'</b> em '+esc(fmtDateLong(dia))+'.'
+    +(s.cruzada&&s.outroDia?'<br>Troca de dias: este dia por <b>'+esc(fmtDateBR(s.outroDia))+'</b>.':'')+'</div></div>';
+  if(s.cruzada){
+    b+='<div class="kv"><span class="k">Neste dia</span><span class="v">'
+      +(s.assumiu?('Cobrindo '+esc(o?o.nome.split(' ')[0]:'?')+' — '+esc(agora)):'Folga (dia cedido)')+'</span></div>'
+      +'<div class="kv"><span class="k">Escala que seria sua</span><span class="v">'+esc(antes)+'</span></div>'
+      +'<div class="kv"><span class="k">Dia trocado</span><span class="v">'+esc(s.outroDia?fmtDateBR(s.outroDia):'—')+'</span></div>';
+  }else{
+    b+='<div class="kv"><span class="k">Escala original</span><span class="v">'+esc(antes)+'</span></div>'
+      +'<div class="kv"><span class="k">Passou a fazer</span><span class="v">'+esc(agora)+'</span></div>';
+  }
+  b+='<div class="kv"><span class="k">Trocou com</span><span class="v">'+esc(o?o.nome:'?')+'</span></div>';
   if(tr&&(tr.datas||[]).length>1)
     b+='<div class="kv"><span class="k">Dias desta troca</span><span class="v">'+tr.datas.slice().sort().map(fmtDateBR).join(' · ')+'</span></div>';
   if(s.trocaObs)b+='<div class="kv"><span class="k">Observação</span><span class="v">'+esc(s.trocaObs)+'</span></div>';
@@ -1178,7 +1218,7 @@ function resumoDia(dia){
   const trab=FUNCS.filter(f=>map[f.id].status==='trabalha').length;
   const folga=FUNCS.length-trab;
   const falta=shortages(dia).out.reduce((s,o)=>s+o.falta,0);
-  const trocas=TROCAS.filter(t=>(t.datas||[]).includes(dia)).length;
+  const trocas=TROCAS.filter(t=>(t.datas||[]).includes(dia)||(t.datasB||[]).includes(dia)).length;
   return '<div class="stats">'
     +'<div class="stat good"><div class="v">'+trab+'</div><div class="k"><i class="ti ti-user-check" aria-hidden="true"></i> Trabalhando</div></div>'
     +'<div class="stat"><div class="v">'+folga+'</div><div class="k"><i class="ti ti-bed" aria-hidden="true"></i> De folga</div></div>'
@@ -1275,17 +1315,24 @@ function cardsDoDia(dia){
   const off=FUNCS.filter(f=>map[f.id].status==='folga').sort((a,b)=>a.nome.localeCompare(b.nome));
   html+='<div class="card"><h2><i class="ti ti-bed" aria-hidden="true"></i> De folga <span class="tag gray">'+off.length+'</span></h2>';
   if(off.length===0)html+='<div class="muted" style="font-size:13.5px">Ninguém de folga.</div>';
-  else{ html+='<div class="chips">'; off.forEach(f=>{ const s=map[f.id]; let extra='';
-    if(s.trocaCom)extra=' <i class="ti ti-arrows-exchange" aria-hidden="true"></i>';
-    html+='<span class="tag folga">'+esc(f.nome)+' · '+esc(s.motivo||'Folga')+extra+'</span>'; }); html+='</div>'; }
+  else{ html+='<div class="chips">'; off.forEach(f=>{ const s=map[f.id];
+    const marca=s.trocaCom?'<button type="button" class="troca-mark" data-f="'+f.id+'" data-d="'+dia+'" aria-label="Ver detalhes da troca de '+esc(f.nome)+'" title="Trocado neste dia — toque para ver">*</button>':'';
+    html+='<span class="tag folga">'+esc(f.nome)+' · '+esc(s.motivo||'Folga')+'</span>'+marca; }); html+='</div>'; }
   html+='</div>';
 
   // trocas do dia
-  const td=TROCAS.filter(t=>(t.datas||[]).includes(dia));
+  const td=TROCAS.filter(t=>(t.datas||[]).includes(dia)||(t.datasB||[]).includes(dia));
   if(td.length){
     html+='<div class="card"><h2><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Trocas neste dia</h2>';
     td.forEach(t=>{ const a=funcById(t.aId),b=funcById(t.bId);
-      html+='<div class="alert warn"><i class="ti ti-arrows-exchange" aria-hidden="true"></i><div><b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b>'+(t.obs?' — '+esc(t.obs):'')+'</div></div>'; });
+      let txt='<b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b>';
+      if(t.cruzada){
+        const ehA=(t.datas||[]).includes(dia);
+        const cede=ehA?a:b, cobre=ehA?b:a, outro=ehA?(t.datasB||[])[0]:(t.datas||[])[0];
+        txt='<b>'+esc(cobre?cobre.nome:'?')+'</b> cobre <b>'+esc(cede?cede.nome:'?')+'</b> hoje'
+           +(outro?' — em troca do dia <b>'+esc(fmtDateBR(outro))+'</b>':'');
+      }
+      html+='<div class="alert warn"><i class="ti ti-arrows-exchange" aria-hidden="true"></i><div>'+txt+(t.obs?' — '+esc(t.obs):'')+'</div></div>'; });
     html+='</div>';
   }
   return html;
@@ -1298,17 +1345,27 @@ function shiftDay(s,delta){ const d=parseDate(s)||new Date(); d.setDate(d.getDat
 function renderTrocas(){
   const el=$('#tab-trocas');
   let html='<div class="card"><h2><i class="ti ti-arrows-exchange"></i> Registrar troca de horário</h2>'
-    +'<p class="hint">Ex.: nos dias 01 e 06, o Funcionário 01 trocou de horário com o Funcionário 02. A troca aparece automaticamente na escala diária, trocando os horários/folgas entre os dois nesses dias.</p>';
+    +'<p class="hint">Dois tipos: <b>mesmo dia</b> (os dois trocam o horário entre si naquele dia) ou <b>dias diferentes</b> (ex.: o Funcionário 1 trocou o dia 01 pelo dia 07 com o Funcionário 2 — quem estava escalado folga e o outro cobre). A escala do dia se ajusta sozinha.</p>';
   if(FUNCS.length<2){
     html+='<div class="empty"><i class="ti ti-users"></i>Cadastre pelo menos 2 funcionários para registrar trocas.</div></div>';
     el.innerHTML=html; return;
   }
   const opts=FUNCS.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(f=>'<option value="'+f.id+'">'+esc(f.nome)+' ('+esc(catName(f.catId))+')</option>').join('');
-  html+='<div class="two"><div class="f-wrap"><label class="f">Funcionário 1</label><select id="trA">'+opts+'</select></div>'
-    +'<div class="f-wrap"><label class="f">Funcionário 2</label><select id="trB">'+opts+'</select></div></div>'
-    +'<div class="f-wrap" style="margin-top:12px"><label class="f">Observação (opcional)</label><input id="trObs" placeholder="ex.: consulta médica"></div>'
-    +'<div class="f-wrap" style="margin-top:12px"><label class="f">Dias da troca</label><div class="inline-add"><div class="f-wrap"><input type="date" id="trData" value="'+diaSel+'"></div><button class="btn btn-ghost btn-sm" id="trAddData"><i class="ti ti-plus"></i> Adicionar dia</button></div><div class="chips" id="trDatas" style="margin-top:10px"></div></div>'
-    +'<div class="row-actions"><button class="btn btn-primary btn-sm" id="trSave"><i class="ti ti-check"></i> Salvar troca</button></div></div>';
+  html+='<div class="seg" role="group" aria-label="Tipo de troca" style="margin-bottom:14px">'
+    +'<button type="button" id="trTipoMesmo" aria-pressed="'+(trocaCruzada?'false':'true')+'">Mesmo dia</button>'
+    +'<button type="button" id="trTipoCruz" aria-pressed="'+(trocaCruzada?'true':'false')+'">Dias diferentes</button></div>'
+    +'<div class="two"><div class="f-wrap"><label class="f" for="trA">Funcionário 1</label><select id="trA">'+opts+'</select></div>'
+    +'<div class="f-wrap"><label class="f" for="trB">Funcionário 2</label><select id="trB">'+opts+'</select></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="trObs">Observação (opcional)</label><input id="trObs" placeholder="ex.: consulta médica"></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="trData">'+(trocaCruzada?'Dia(s) do Funcionário 1 (que ele deixa de fazer)':'Dias da troca')+'</label>'
+    +'<div class="inline-add"><div class="f-wrap"><input type="date" id="trData" value="'+diaSel+'"></div>'
+    +'<button class="btn btn-ghost btn-sm" id="trAddData" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar dia</button></div>'
+    +'<div class="chips" id="trDatas" style="margin-top:10px"></div></div>'
+    +(trocaCruzada?('<div class="f-wrap" style="margin-top:12px"><label class="f" for="trDataB">Dia(s) do Funcionário 2 (que ele deixa de fazer)</label>'
+      +'<div class="inline-add"><div class="f-wrap"><input type="date" id="trDataB" value="'+diaSel+'"></div>'
+      +'<button class="btn btn-ghost btn-sm" id="trAddDataB" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar dia</button></div>'
+      +'<div class="chips" id="trDatasB" style="margin-top:10px"></div></div>'):'')
+    +'<div class="row-actions"><button class="btn btn-primary btn-sm" id="trSave" type="button"><i class="ti ti-check" aria-hidden="true"></i> Salvar troca</button></div></div>';
 
   // lista
   html+='<div class="card"><h2><i class="ti ti-history"></i> Trocas registradas <span class="tag gray">'+TROCAS.length+'</span></h2>';
@@ -1317,7 +1374,15 @@ function renderTrocas(){
     const sorted=TROCAS.slice().sort((a,b)=>(b.datas[0]||'').localeCompare(a.datas[0]||''));
     html+='<div class="tbl-wrap"><table><thead><tr><th>Funcionários</th><th>Dias</th><th>Obs</th><th></th></tr></thead><tbody>';
     sorted.forEach(t=>{ const a=funcById(t.aId),b=funcById(t.bId);
-      html+='<tr><td><b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b></td><td>'+ (t.datas||[]).map(d=>'<span class="tag gray">'+fmtDateBR(d)+'</span>').join(' ') +'</td><td class="muted">'+esc(t.obs||'')+'</td><td style="text-align:right"><button class="btn btn-danger btn-sm trDel" type="button" data-id="'+t.id+'" aria-label="Remover troca de '+esc(a?a.nome:'?')+' com '+esc(b?b.nome:'?')+'"><i class="ti ti-trash" aria-hidden="true"></i></button></td></tr>';
+      const dias = t.cruzada
+        ? '<span class="tag gray">'+esc((a?a.nome.split(' ')[0]:'?'))+': '+(t.datas||[]).map(fmtDateBR).join(', ')+'</span> '
+          +'<span class="tag troca"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> por</span> '
+          +'<span class="tag gray">'+esc((b?b.nome.split(' ')[0]:'?'))+': '+(t.datasB||[]).map(fmtDateBR).join(', ')+'</span>'
+        : (t.datas||[]).map(d=>'<span class="tag gray">'+fmtDateBR(d)+'</span>').join(' ');
+      html+='<tr><td><b>'+esc(a?a.nome:'?')+'</b> ⇄ <b>'+esc(b?b.nome:'?')+'</b>'
+        +(t.cruzada?'<br><span class="muted" style="font-size:11.5px">troca de dias</span>':'')+'</td>'
+        +'<td>'+dias+'</td><td class="muted">'+esc(t.obs||'')+'</td>'
+        +'<td style="text-align:right"><button class="btn btn-danger btn-sm trDel" type="button" data-id="'+t.id+'" aria-label="Remover troca de '+esc(a?a.nome:'?')+' com '+esc(b?b.nome:'?')+'"><i class="ti ti-trash" aria-hidden="true"></i></button></td></tr>';
     });
     html+='</tbody></table></div>';
   }
@@ -1325,17 +1390,33 @@ function renderTrocas(){
   el.innerHTML=html;
 
   // form state
-  let datas=[];
-  const renderDatas=()=>{ $('#trDatas').innerHTML = datas.length? datas.map((d,i)=>'<span class="tag">'+fmtDateBR(d)+' <button data-i="'+i+'" class="rmData" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800">×</button></span>').join('') : '<span class="muted" style="font-size:12.5px">Nenhum dia adicionado ainda.</span>';
-    $$('.rmData').forEach(b=>b.onclick=()=>{ datas.splice(+b.dataset.i,1); renderDatas(); }); };
+  let datas=[], datasB=[];
+  const pinta=(arr,alvo,cls)=>{
+    const el=$(alvo); if(!el)return;
+    el.innerHTML = arr.length ? arr.map((d,i)=>'<span class="tag">'+fmtDateBR(d)+' <button data-i="'+i+'" class="'+cls+'" aria-label="Remover '+fmtDateBR(d)+'" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800">×</button></span>').join('')
+      : '<span class="muted" style="font-size:12.5px">Nenhum dia adicionado ainda.</span>';
+    $$('.'+cls).forEach(b=>b.onclick=()=>{ arr.splice(+b.dataset.i,1); pinta(arr,alvo,cls); });
+  };
+  const renderDatas=()=>{ pinta(datas,'#trDatas','rmData'); if(trocaCruzada)pinta(datasB,'#trDatasB','rmDataB'); };
   renderDatas();
+  $('#trTipoMesmo').onclick=()=>{ trocaCruzada=false; renderTrocas(); };
+  $('#trTipoCruz').onclick=()=>{ trocaCruzada=true; renderTrocas(); };
   $('#trAddData').onclick=()=>{ const v=$('#trData').value; if(!v)return; if(!datas.includes(v))datas.push(v); datas.sort(); renderDatas(); };
+  if($('#trAddDataB'))$('#trAddDataB').onclick=()=>{ const v=$('#trDataB').value; if(!v)return; if(!datasB.includes(v))datasB.push(v); datasB.sort(); renderDatas(); };
   $('#trSave').onclick=()=>{
     const aId=$('#trA').value,bId=$('#trB').value;
     if(aId===bId){toast('Escolha dois funcionários diferentes','err');return;}
     if(!datas.length){ const v=$('#trData').value; if(v)datas.push(v); }
     if(!datas.length){toast('Adicione ao menos um dia','err');return;}
-    TROCAS.push({id:uid(),aId,bId,datas:datas.slice(),obs:$('#trObs').value.trim()});
+    if(trocaCruzada){
+      if(!datasB.length){ const v=($('#trDataB')||{}).value; if(v)datasB.push(v); }
+      if(!datasB.length){toast('Adicione o dia do Funcionário 2','err');return;}
+      const repetido=datas.find(d=>datasB.includes(d));
+      if(repetido){toast('O dia '+fmtDateBR(repetido)+' está nos dois lados — use "Mesmo dia"','err');return;}
+      TROCAS.push({id:uid(),aId,bId,cruzada:true,datas:datas.slice(),datasB:datasB.slice(),obs:$('#trObs').value.trim()});
+    }else{
+      TROCAS.push({id:uid(),aId,bId,datas:datas.slice(),obs:$('#trObs').value.trim()});
+    }
     saveAll();render();toast('Troca registrada','ok');
   };
   $$('.trDel').forEach(b=>b.onclick=()=>{ if(confirm('Remover esta troca?')){ TROCAS=TROCAS.filter(t=>t.id!==b.dataset.id); saveAll();render(); } });
@@ -2407,8 +2488,12 @@ function formDiverg(id,pre){
     +'<input id="dvQtd" type="number" min="1" value="'+(v.qtd||1)+'"></div>'
     +'<div class="f-wrap"><label class="f" for="dvMotivo">Motivo da devolução *</label><select id="dvMotivo">'
     +MOTIVOS.map(m=>'<option'+((v.motivo===m)?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select></div></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="dvLote">Lote</label>'
+    +'<input id="dvLote" value="'+esc(v.lote||'')+'" autocomplete="off" placeholder="ex.: 4471A"></div>'
+    +'<div class="f-wrap"><label class="f" for="dvEan">Código de barras</label>'
+    +'<input id="dvEan" value="'+esc(v.ean||'')+'" inputmode="numeric" autocomplete="off" placeholder="ex.: 7891058001445"></div></div>'
     +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="dvObs">Detalhe (opcional)</label>'
-    +'<input id="dvObs" value="'+esc(v.obs||'')+'" placeholder="ex.: 3 caixas amassadas, lote 4471"></div>'
+    +'<input id="dvObs" value="'+esc(v.obs||'')+'" placeholder="ex.: 3 caixas amassadas"></div>'
     +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="dvNFDev">NF de devolução</label>'
     +'<input id="dvNFDev" inputmode="numeric" value="'+esc(v.nfDev||'')+'" placeholder="deixe vazio até emitir"></div>'
     +'<div class="f-wrap"><label class="f" for="dvStatus">Situação</label><select id="dvStatus">'
@@ -2422,6 +2507,7 @@ function formDiverg(id,pre){
     if(!produto){ toast('Informe o produto','err'); $('#dvProd').focus(); return; }
     const dados={nf,produto,dist:$('#dvDist').value.trim(),qtd:Math.max(1,+$('#dvQtd').value||1),
       motivo:$('#dvMotivo').value,obs:$('#dvObs').value.trim(),nfDev:$('#dvNFDev').value.trim(),
+      lote:$('#dvLote').value.trim(),ean:$('#dvEan').value.replace(/\D/g,''),
       status:$('#dvStatus').value};
     if(d)Object.assign(d,dados);
     else DIVERG.push(Object.assign({id:uid(),data:todayStr()},dados));
@@ -2435,7 +2521,7 @@ function renderDiverg(){
   const semNF=DIVERG.filter(d=>d.status!=='resolvida'&&!d.nfDev).length;
 
   let html='<div class="card"><h2><i class="ti ti-file-alert" aria-hidden="true"></i> Divergências de nota fiscal</h2>'
-    +'<p class="hint">Registre o que veio errado: a nota que chegou, o produto, o motivo e — quando emitir — a nota fiscal de devolução.</p>'
+    +'<p class="hint">Registre o que veio errado: a nota, o produto, lote e código de barras, o motivo e — quando emitir — a nota fiscal de devolução.</p>'
     +'<div class="row-actions" style="margin-top:0"><button class="btn btn-primary btn-sm" id="dvNovo" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Registrar divergência</button></div>';
   if(DIVERG.length){
     html+='<div class="stats">'
@@ -2455,7 +2541,7 @@ function renderDiverg(){
     +'<div class="search-wrap"><i class="ti ti-search" aria-hidden="true"></i>'
     +'<input type="text" style="position:absolute;opacity:0;pointer-events:none;height:0" tabindex="-1" aria-hidden="true" autocomplete="username">'
     +'<label class="sr-only" for="dvBusca">Buscar divergência</label>'
-    +'<input id="dvBusca" type="search" autocomplete="off" placeholder="Buscar por nota, produto, distribuidora ou motivo…" value="'+esc(buscaDiv)+'"></div>'
+    +'<input id="dvBusca" type="search" autocomplete="off" placeholder="Buscar por nota, produto, lote, código de barras…" value="'+esc(buscaDiv)+'"></div>'
     +'<div class="seg" role="group" aria-label="Filtrar divergências" style="margin-bottom:14px">'
     +'<button type="button" class="fDiv" data-f="abertas" aria-pressed="'+(filtroDiv==='abertas')+'">Em aberto</button>'
     +'<button type="button" class="fDiv" data-f="resolvidas" aria-pressed="'+(filtroDiv==='resolvidas')+'">Resolvidas</button>'
@@ -2466,18 +2552,21 @@ function renderDiverg(){
     if(filtroDiv==='abertas'&&d.status==='resolvida')return false;
     if(filtroDiv==='resolvidas'&&d.status!=='resolvida')return false;
     if(q&&!(norm(d.produto).includes(q)||norm(d.nf).includes(q)||norm(d.dist||'').includes(q)
-      ||norm(d.motivo||'').includes(q)||norm(d.nfDev||'').includes(q)))return false;
+      ||norm(d.motivo||'').includes(q)||norm(d.nfDev||'').includes(q)
+      ||norm(d.lote||'').includes(q)||String(d.ean||'').includes(q)))return false;
     return true;
   }).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
 
   if(!lista.length){
     html+='<div class="empty"><i class="ti ti-search-off" aria-hidden="true"></i>Nada encontrado neste filtro.</div>';
   }else{
-    html+='<div class="tbl-wrap"><table><thead><tr><th>NF</th><th>Produto</th><th>Motivo</th><th>NF devolução</th><th>Situação</th><th></th></tr></thead><tbody>';
+    html+='<div class="tbl-wrap"><table><thead><tr><th>NF</th><th>Produto</th><th>Lote / Cód. barras</th><th>Motivo</th><th>NF devolução</th><th>Situação</th><th></th></tr></thead><tbody>';
     lista.forEach(d=>{
       html+='<tr><td class="num"><b>'+esc(d.nf)+'</b>'+(d.dist?'<br><span class="muted" style="font-size:11.5px">'+esc(d.dist)+'</span>':'')+'</td>'
         +'<td>'+esc(d.produto)+(d.qtd>1?' <span class="muted">· '+d.qtd+' un</span>':'')
         +(d.obs?'<br><span class="muted" style="font-size:11.5px">'+esc(d.obs)+'</span>':'')+'</td>'
+        +'<td class="num" style="font-size:12px">'+(d.lote?'<b>'+esc(d.lote)+'</b>':'<span class="muted">—</span>')
+        +(d.ean?'<br><span class="muted">'+esc(d.ean)+'</span>':'')+'</td>'
         +'<td><span class="tag troca">'+esc(d.motivo||'—')+'</span></td>'
         +'<td class="num">'+(d.nfDev?esc(d.nfDev):'<span class="muted">a emitir</span>')+'</td>'
         +'<td>'+(d.status==='resolvida'
@@ -2508,6 +2597,247 @@ function renderDiverg(){
     const d=DIVERG.find(x=>x.id===b.dataset.id); if(!d)return;
     if(!confirm('Excluir a divergência da NF '+d.nf+' ('+d.produto+')?'))return;
     DIVERG=DIVERG.filter(x=>x.id!==b.dataset.id); saveAll(); renderDiverg();
+  });
+}
+
+/* ============================================================
+   ABA: VALIDADE — produtos de olho no vencimento
+   Você cadastra o medicamento e a data de validade; o app avisa
+   quando entra na janela de alerta (padrão 45 dias). Sem servidor,
+   o aviso acontece quando o app é aberto: selo na aba, faixa no
+   topo e, se você autorizar, uma notificação do navegador.
+   ============================================================ */
+let buscaVal='', filtroVal='alerta';
+
+function diasAte(dataStr){
+  const d=parseDate(dataStr); if(!d)return null;
+  const hoje=parseDate(todayStr());
+  return Math.round((d-hoje)/86400000);
+}
+function situacaoVal(item){
+  const n=diasAte(item.venc);
+  if(n===null)return {t:'sem',rot:'Sem data',dias:null};
+  if(n<0)   return {t:'vencido',rot:'Vencido há '+Math.abs(n)+' dia(s)',dias:n};
+  if(n===0) return {t:'vencido',rot:'Vence hoje',dias:0};
+  if(n<=(+VALCFG.dias||45)) return {t:'alerta',rot:'Vence em '+n+' dia(s)',dias:n};
+  return {t:'ok',rot:'Vence em '+n+' dia(s)',dias:n};
+}
+// quantos exigem atenção agora (vencidos + dentro da janela)
+function contarAlertasVal(){
+  return VALIDADE.filter(v=>{ const s=situacaoVal(v); return s.t==='vencido'||s.t==='alerta'; }).length;
+}
+function selosDasAbas(){
+  const n=contarAlertasVal();
+  const b=$('#tb-validade'); if(!b)return;
+  let selo=b.querySelector('.tab-badge');
+  if(n>0){
+    if(!selo){ selo=document.createElement('span'); selo.className='tab-badge'; b.appendChild(selo); }
+    selo.textContent=n>99?'99+':n;
+    selo.setAttribute('aria-label',n+' produto(s) precisando de atenção');
+  }else if(selo)selo.remove();
+}
+
+/* ---------- aviso do navegador (só com o app aberto) ---------- */
+function podeNotificar(){ return typeof Notification!=='undefined'; }
+async function pedirNotificacao(){
+  if(!podeNotificar()){ toast('Este navegador não tem notificações','err'); return; }
+  let p=Notification.permission;
+  if(p==='default'){ try{ p=await Notification.requestPermission(); }catch(e){ p='denied'; } }
+  if(p==='granted'){ VALCFG.notificar=true; saveAll(); toast('Aviso do navegador ligado','ok'); avisarVencimentos(true); }
+  else { VALCFG.notificar=false; saveAll(); toast('O navegador bloqueou as notificações','err'); }
+  renderValidade();
+}
+function avisarVencimentos(forcar){
+  if(!VALCFG.notificar||!podeNotificar()||Notification.permission!=='granted')return;
+  const hoje=todayStr();
+  if(!forcar&&VALCFG.ultimoAviso===hoje)return;   // um aviso por dia
+  const lista=VALIDADE.filter(v=>{ const s=situacaoVal(v); return s.t==='vencido'||s.t==='alerta'; });
+  if(!lista.length)return;
+  VALCFG.ultimoAviso=hoje; saveAll();
+  const vencidos=lista.filter(v=>situacaoVal(v).t==='vencido').length;
+  const corpo=lista.slice(0,4).map(v=>'• '+v.nome+' — '+situacaoVal(v).rot).join('\n')
+    +(lista.length>4?'\n… e mais '+(lista.length-4):'');
+  try{
+    new Notification('FarmáciaGest — '+lista.length+' produto(s) de olho'+(vencidos?' ('+vencidos+' vencido[s])':''),
+      {body:corpo,tag:'farmaciagest-validade'});
+  }catch(e){ /* alguns navegadores exigem service worker: o aviso na tela já cobre */ }
+}
+
+/* ---------- cadastro ---------- */
+function formValidade(id,pre){
+  const it=id?VALIDADE.find(x=>x.id===id):null;
+  const v=it||pre||{};
+  const dists=[...new Set(RECEB.concat(VALIDADE).map(x=>x.dist).filter(Boolean))];
+  openModal(it?'Editar produto':'Adicionar produto para acompanhar','ti-calendar-exclamation',
+    '<div class="f-wrap"><label class="f" for="vlNome">Medicamento / produto *</label>'
+    +'<input id="vlNome" value="'+esc(v.nome||'')+'" placeholder="ex.: Amoxicilina 500mg c/21"></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="vlVenc">Validade *</label>'
+    +'<input type="date" id="vlVenc" value="'+esc(v.venc||'')+'"></div>'
+    +'<div class="f-wrap"><label class="f" for="vlQtd">Quantidade</label>'
+    +'<input id="vlQtd" type="number" min="1" value="'+(v.qtd||1)+'"></div></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="vlLote">Lote</label>'
+    +'<input id="vlLote" value="'+esc(v.lote||'')+'" autocomplete="off" placeholder="ex.: 4471A"></div>'
+    +'<div class="f-wrap"><label class="f" for="vlEan">Código de barras</label>'
+    +'<input id="vlEan" value="'+esc(v.ean||'')+'" inputmode="numeric" autocomplete="off" placeholder="7891058001445"></div></div>'
+    +'<div class="two" style="margin-top:12px"><div class="f-wrap"><label class="f" for="vlDist">Distribuidora</label>'
+    +'<input id="vlDist" list="vlDistList" value="'+esc(v.dist||'')+'" placeholder="ex.: Servimed">'
+    +'<datalist id="vlDistList">'+dists.map(x=>'<option value="'+esc(x)+'">').join('')+'</datalist></div>'
+    +'<div class="f-wrap"><label class="f" for="vlLocal">Onde está</label>'
+    +'<input id="vlLocal" value="'+esc(v.local||'')+'" placeholder="ex.: gôndola 3 / geladeira"></div></div>'
+    +'<div class="f-wrap" style="margin-top:12px"><label class="f" for="vlObs">Observação</label>'
+    +'<input id="vlObs" value="'+esc(v.obs||'')+'" placeholder="ex.: negociar troca com o representante"></div>',
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-primary btn-sm" id="vlOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Salvar</button>');
+  $('#vlOk').onclick=()=>{
+    const nome=$('#vlNome').value.trim(), venc=$('#vlVenc').value;
+    if(!nome){ toast('Informe o produto','err'); $('#vlNome').focus(); return; }
+    if(!venc){ toast('Informe a validade','err'); $('#vlVenc').focus(); return; }
+    const dados={nome,venc,qtd:Math.max(1,+$('#vlQtd').value||1),lote:$('#vlLote').value.trim(),
+      ean:$('#vlEan').value.replace(/\D/g,''),dist:$('#vlDist').value.trim(),
+      local:$('#vlLocal').value.trim(),obs:$('#vlObs').value.trim()};
+    if(it)Object.assign(it,dados);
+    else VALIDADE.push(Object.assign({id:uid(),criadoEm:todayStr(),resolvido:false},dados));
+    saveAll(); closeModal(); renderValidade(); selosDasAbas();
+    toast(it?'Produto atualizado':'Produto em acompanhamento','ok');
+  };
+}
+
+/* ---------- a aba ---------- */
+function renderValidade(){
+  const el=$('#tab-validade');
+  const janela=+VALCFG.dias||45;
+  const ativos=VALIDADE.filter(v=>!v.resolvido);
+  const venc=ativos.filter(v=>situacaoVal(v).t==='vencido');
+  const alerta=ativos.filter(v=>situacaoVal(v).t==='alerta');
+  const ok=ativos.filter(v=>situacaoVal(v).t==='ok');
+
+  let html='<div class="card"><h2><i class="ti ti-calendar-exclamation" aria-hidden="true"></i> Produtos de olho no vencimento</h2>'
+    +'<p class="hint">Cadastre o que precisa de atenção e o app avisa quando faltar <b>'+janela+' dia(s)</b> para vencer. O aviso aparece ao abrir o app — pela aba marcada e pela faixa aqui em cima.</p>'
+    +'<div class="row-actions" style="margin-top:0"><button class="btn btn-primary btn-sm" id="vlNovo" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar produto</button>'
+    +'<button class="btn btn-ghost btn-sm" id="vlCfg" type="button"><i class="ti ti-settings" aria-hidden="true"></i> Janela de alerta ('+janela+' dias)</button>'
+    +(podeNotificar()&&Notification.permission!=='granted'
+      ? '<button class="btn btn-ghost btn-sm" id="vlNotif" type="button"><i class="ti ti-bell" aria-hidden="true"></i> Ativar aviso do navegador</button>'
+      : (VALCFG.notificar?'<span class="tag"><i class="ti ti-bell-ringing" aria-hidden="true"></i> Aviso do navegador ligado</span>':''))
+    +'</div>';
+
+  if(VALIDADE.length){
+    html+='<div class="stats">'
+      +'<div class="stat'+(venc.length?' bad':'')+'"><div class="v">'+venc.length+'</div><div class="k"><i class="ti ti-alert-octagon" aria-hidden="true"></i> Vencidos</div></div>'
+      +'<div class="stat'+(alerta.length?' bad':'')+'"><div class="v">'+alerta.length+'</div><div class="k"><i class="ti ti-clock-exclamation" aria-hidden="true"></i> Em alerta</div></div>'
+      +'<div class="stat good"><div class="v">'+ok.length+'</div><div class="k"><i class="ti ti-circle-check" aria-hidden="true"></i> Em dia</div></div>'
+      +'<div class="stat"><div class="v">'+VALIDADE.filter(v=>v.resolvido).length+'</div><div class="k"><i class="ti ti-archive" aria-hidden="true"></i> Resolvidos</div></div>'
+      +'</div>';
+  }
+  html+='</div>';
+
+  // faixa de aviso no topo
+  if(venc.length||alerta.length){
+    html+='<div class="card" style="padding-top:16px">';
+    if(venc.length)
+      html+='<div class="alert danger"><i class="ti ti-alert-octagon" aria-hidden="true"></i><div><b>'+venc.length+' produto(s) vencido(s)</b> — retire da gôndola e resolva a devolução.</div></div>';
+    if(alerta.length)
+      html+='<div class="alert warn"><i class="ti ti-clock-exclamation" aria-hidden="true"></i><div><b>'+alerta.length+' produto(s) vencem nos próximos '+janela+' dias</b> — dá tempo de negociar troca ou promover a saída.</div></div>';
+    html+='</div>';
+  }
+
+  if(!VALIDADE.length){
+    html+='<div class="card"><div class="empty"><i class="ti ti-calendar-off" aria-hidden="true"></i>Nenhum produto em acompanhamento.<br>Cadastre os medicamentos que você quer vigiar e o app avisa antes de vencer.</div></div>';
+    el.innerHTML=html; ligarValidade(); return;
+  }
+
+  html+='<div class="card"><h2><i class="ti ti-list-search" aria-hidden="true"></i> Acompanhamento</h2>'
+    +'<div class="search-wrap"><i class="ti ti-search" aria-hidden="true"></i>'
+    +'<input type="text" style="position:absolute;opacity:0;pointer-events:none;height:0" tabindex="-1" aria-hidden="true" autocomplete="username">'
+    +'<label class="sr-only" for="vlBusca">Buscar produto</label>'
+    +'<input id="vlBusca" type="search" autocomplete="off" placeholder="Buscar por produto, lote, código de barras…" value="'+esc(buscaVal)+'"></div>'
+    +'<div class="seg" role="group" aria-label="Filtrar produtos" style="margin-bottom:14px">'
+    +'<button type="button" class="fVal" data-f="alerta" aria-pressed="'+(filtroVal==='alerta')+'">Precisa de atenção</button>'
+    +'<button type="button" class="fVal" data-f="todos" aria-pressed="'+(filtroVal==='todos')+'">Todos</button>'
+    +'<button type="button" class="fVal" data-f="resolvidos" aria-pressed="'+(filtroVal==='resolvidos')+'">Resolvidos</button></div>';
+
+  const q=norm(buscaVal);
+  let lista=VALIDADE.filter(v=>{
+    const s=situacaoVal(v);
+    if(filtroVal==='alerta'&&(v.resolvido||(s.t!=='vencido'&&s.t!=='alerta')))return false;
+    if(filtroVal==='resolvidos'&&!v.resolvido)return false;
+    if(filtroVal==='todos'&&v.resolvido)return false;
+    if(q&&!(norm(v.nome).includes(q)||norm(v.lote||'').includes(q)||String(v.ean||'').includes(q)
+      ||norm(v.dist||'').includes(q)||norm(v.local||'').includes(q)))return false;
+    return true;
+  }).sort((a,b)=>(a.venc||'').localeCompare(b.venc||''));
+
+  if(!lista.length){
+    html+='<div class="empty"><i class="ti ti-search-off" aria-hidden="true"></i>'
+      +(filtroVal==='alerta'?'Nada vencendo nos próximos '+janela+' dias.':'Nada encontrado neste filtro.')+'</div>';
+  }else{
+    html+='<div class="tbl-wrap"><table><thead><tr><th>Produto</th><th>Lote / Cód. barras</th><th>Validade</th><th>Situação</th><th>Onde</th><th></th></tr></thead><tbody>';
+    lista.forEach(v=>{
+      const s=situacaoVal(v);
+      const cls=s.t==='vencido'?'folga':(s.t==='alerta'?'troca':'');
+      html+='<tr><td><b>'+esc(v.nome)+'</b>'+(v.qtd>1?' <span class="muted">· '+v.qtd+' un</span>':'')
+        +(v.dist?'<br><span class="muted" style="font-size:11.5px">'+esc(v.dist)+'</span>':'')
+        +(v.obs?'<br><span class="muted" style="font-size:11.5px">'+esc(v.obs)+'</span>':'')+'</td>'
+        +'<td class="num" style="font-size:12px">'+(v.lote?'<b>'+esc(v.lote)+'</b>':'<span class="muted">—</span>')
+        +(v.ean?'<br><span class="muted">'+esc(v.ean)+'</span>':'')+'</td>'
+        +'<td class="num">'+esc(fmtDateBR(v.venc))+'</td>'
+        +'<td><span class="tag '+cls+'">'+esc(s.rot)+'</span></td>'
+        +'<td class="muted" style="font-size:12px">'+esc(v.local||'—')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'
+        +'<button class="btn btn-ghost btn-sm vlEdit" type="button" data-id="'+v.id+'" aria-label="Editar '+esc(v.nome)+'"><i class="ti ti-pencil" aria-hidden="true"></i></button> '
+        +'<button class="btn btn-ghost btn-sm vlDiv" type="button" data-id="'+v.id+'" aria-label="Abrir divergência de '+esc(v.nome)+'" title="Registrar divergência/devolução"><i class="ti ti-file-alert" aria-hidden="true"></i></button> '
+        +'<button class="btn btn-ghost btn-sm vlOkBtn" type="button" data-id="'+v.id+'" aria-label="'+(v.resolvido?'Reabrir':'Marcar como resolvido')+' '+esc(v.nome)+'" title="'+(v.resolvido?'Reabrir':'Resolvido')+'"><i class="ti ti-'+(v.resolvido?'rotate':'check')+'" aria-hidden="true"></i></button> '
+        +'<button class="btn btn-danger btn-sm vlDel" type="button" data-id="'+v.id+'" aria-label="Excluir '+esc(v.nome)+'"><i class="ti ti-trash" aria-hidden="true"></i></button></td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }
+  html+='<p class="hint" style="margin:10px 0 0">O aviso do navegador só chega com o app aberto — não é notificação de celular. Para não escapar, deixe o app fixado na tela inicial e confira a aba marcada.</p></div>';
+  el.innerHTML=html;
+  ligarValidade();
+}
+
+function ligarValidade(){
+  const nv=$('#vlNovo'); if(nv)nv.onclick=()=>formValidade(null);
+  const cfg=$('#vlCfg');
+  if(cfg)cfg.onclick=()=>{
+    openModal('Janela de alerta','ti-settings',
+      '<p class="hint" style="margin-top:0">Com quantos dias de antecedência o produto deve entrar em alerta?</p>'
+      +'<div class="f-wrap"><label class="f" for="vlDias">Dias antes do vencimento</label>'
+      +'<input id="vlDias" type="number" min="1" max="365" value="'+(+VALCFG.dias||45)+'"></div>',
+      '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+      +'<button class="btn btn-primary btn-sm" id="vlDiasOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Salvar</button>');
+    $('#vlDiasOk').onclick=()=>{
+      const n=Math.max(1,Math.min(365,+$('#vlDias').value||45));
+      VALCFG.dias=n; saveAll(); closeModal(); renderValidade(); selosDasAbas();
+      toast('Alerta com '+n+' dias de antecedência','ok');
+    };
+  };
+  const nt=$('#vlNotif'); if(nt)nt.onclick=pedirNotificacao;
+  const bs=$('#vlBusca');
+  if(bs){
+    bs.oninput=e=>{
+      let v=e.target.value; if(v.includes('@')){ v=''; e.target.value=''; }
+      buscaVal=v; const pos=e.target.selectionStart; renderValidade();
+      const n=$('#vlBusca'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(err){} }
+    };
+    bs.onfocus=e=>{ if(e.target.value.includes('@')){ e.target.value=''; buscaVal=''; } };
+  }
+  $$('.fVal').forEach(b=>b.onclick=()=>{ filtroVal=b.dataset.f; renderValidade(); });
+  $$('.vlEdit').forEach(b=>b.onclick=()=>formValidade(b.dataset.id));
+  $$('.vlOkBtn').forEach(b=>b.onclick=()=>{
+    const v=VALIDADE.find(x=>x.id===b.dataset.id); if(!v)return;
+    v.resolvido=!v.resolvido; saveAll(); renderValidade(); selosDasAbas();
+    toast(v.resolvido?'Marcado como resolvido':'Reaberto');
+  });
+  $$('.vlDel').forEach(b=>b.onclick=()=>{
+    const v=VALIDADE.find(x=>x.id===b.dataset.id); if(!v)return;
+    if(!confirm('Excluir “'+v.nome+'” do acompanhamento?'))return;
+    VALIDADE=VALIDADE.filter(x=>x.id!==b.dataset.id); saveAll(); renderValidade(); selosDasAbas();
+  });
+  $$('.vlDiv').forEach(b=>b.onclick=()=>{
+    const v=VALIDADE.find(x=>x.id===b.dataset.id); if(!v)return;
+    selectTab('diverg');
+    formDiverg(null,{produto:v.nome,dist:v.dist||'',qtd:v.qtd||1,lote:v.lote||'',ean:v.ean||'',
+      motivo:situacaoVal(v).t==='vencido'?'Produto vencido':'Validade curta'});
   });
 }
 
@@ -2604,20 +2934,22 @@ function renderConfig(){
   };
 
   $('#bkExport').onclick=()=>{
-    const data={v:3,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG,mensal:MENSAL};
+    const data={v:4,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG,mensal:MENSAL,validade:VALIDADE,valcfg:VALCFG};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='farmaciagest-backup.json'; a.click(); URL.revokeObjectURL(a.href);
   };
   $('#bkImport').onclick=()=>$('#bkFile').click();
   $('#bkFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result);
-    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg; if(d.mensal)MENSAL=d.mensal;
+    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg; if(d.mensal)MENSAL=d.mensal; if(d.validade)VALIDADE=d.validade; if(d.valcfg)VALCFG=d.valcfg;
     ensureMinimos(); saveAll(); render(); toast('Dados importados','ok'); }catch(err){ toast('Arquivo inválido','err'); } }; r.readAsText(f); e.target.value=''; };
-  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[];MENSAL=[]; saveAll(); render(); toast('Dados apagados'); } };
+  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[];MENSAL=[];VALIDADE=[]; saveAll(); render(); selosDasAbas(); toast('Dados apagados'); } };
 }
 
 /* ================= start ================= */
 { const v=$('#verTag'); if(v)v.textContent='v'+APP_VER; }
 ensureTurnosDasEscalas();
+selosDasAbas();
+setTimeout(()=>avisarVencimentos(false),1200);
 render();
 </script>
 </body>
