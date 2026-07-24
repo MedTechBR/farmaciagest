@@ -1336,7 +1336,7 @@ function renderBanco(){
   const opts=FUNCS.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(f=>'<option value="'+f.id+'">'+esc(f.nome)+'</option>').join('');
   html+='<div class="inline-add"><div class="f-wrap" style="min-width:180px"><label class="f">Funcionário</label><select id="bkFunc">'+opts+'</select></div>'
     +'<div class="f-wrap" style="max-width:150px"><label class="f">Data</label><input type="date" id="bkData" value="'+todayStr()+'"></div>'
-    +'<div class="f-wrap" style="max-width:130px"><label class="f" for="bkHoras">Horas</label><input id="bkHoras" type="number" step="0.25" min="0" inputmode="decimal" placeholder="2"></div>'
+    +'<div class="f-wrap" style="max-width:130px"><label class="f" for="bkHoras">Horas</label><input id="bkHoras" type="text" inputmode="decimal" autocomplete="off" placeholder="2 ou 1,5"></div>'
     +'<div class="f-wrap" style="min-width:160px"><label class="f" for="bkMot">Motivo</label><input id="bkMot" placeholder="'+(bancoTipo==='sub'?'ex.: saiu 1h mais cedo':'ex.: reposição de estoque')+'"></div>'
     +'<button class="btn '+(bancoTipo==='sub'?'btn-danger':'btn-primary')+' btn-sm" id="bkSave"><i class="ti ti-'+(bancoTipo==='sub'?'minus':'plus')+'" aria-hidden="true"></i> '+(bancoTipo==='sub'?'Descontar':'Lançar')+'</button></div></div>';
 
@@ -1366,9 +1366,10 @@ function renderBanco(){
   $('#bkSub').onclick=()=>{ bancoTipo='sub'; renderBanco(); };
   $('#bkSave').onclick=()=>{
     const funcId=$('#bkFunc').value;
-    let horas=parseFloat(String($('#bkHoras').value).replace(',','.'));
+    const bruto=String($('#bkHoras').value).trim().replace(',','.');
+    let horas=parseFloat(bruto);
     if(!funcId){toast('Escolha o funcionário','err');return;}
-    if(!horas||isNaN(horas)){toast('Informe as horas (ex.: 2 ou 1,5)','err');return;}
+    if(!/^-?\d+(\.\d+)?$/.test(bruto)||!horas||isNaN(horas)){toast('Informe as horas em número (ex.: 2 ou 1,5)','err');$('#bkHoras').focus();return;}
     horas=Math.abs(horas)*(bancoTipo==='sub'?-1:1);   // o sinal vem do botão, não do que foi digitado
     BANCO.push({id:uid(),funcId,data:$('#bkData').value||todayStr(),horas,motivo:$('#bkMot').value.trim()});
     saveAll();renderBanco();
