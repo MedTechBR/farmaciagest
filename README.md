@@ -8,11 +8,12 @@ Gestão de escala, trocas e banco de horas da farmácia. App de página única (
 
 - **Funcionários** — cadastro por função (balconista, entregador, caixa), com importação da escala a partir de planilha `.xlsx`/`.csv` (reconhecimento automático de colunas + pré-visualização antes de confirmar).
 - **Escala** — em dois modos: **Dia** (quem trabalha em cada turno, folgas, trocas, matriz de cobertura mínima e resumo do dia) e **Semana** (os 7 dias lado a lado, com marcação de desfalque e feriado; clicar num dia abre a escala completa dele). Botão **Imprimir** com folha de estilo própria para colar no balcão.
-- **Trocas** — registro de trocas entre funcionários. No dia da troca aparece um **`*`** ao lado do nome na escala; tocar nele abre o detalhe (escala original, o que a pessoa passou a fazer, com quem trocou, dias e observação).
+- **Trocas** — dois tipos: **mesmo dia** (os dois invertem o horário entre si) e **dias diferentes** (ex.: *trocou o dia 01 pelo dia 07* — quem estava escalado folga e o outro cobre, nos dois sentidos). No dia da troca aparece um **`*`** ao lado do nome na escala, dos dois lados; tocar nele abre o detalhe (o que a pessoa faria, o que passou a fazer, qual dia foi trocado por qual, com quem e observação).
 - **Banco de horas** — **Adicionar** (hora extra) ou **Descontar** (compensação, falta, saída antecipada) com saldo por funcionário. As horas são digitadas em positivo (aceita `1,5` ou `1.5`) e o sinal vem do botão.
 - **Recebimento** — entrada de mercadoria: anexa documento, lista os produtos com a distribuidora entre parênteses, busca, filtros e caixa para marcar o que chegou (ver abaixo).
-- **Divergências** — pendências de nota fiscal: nota, produto, distribuidora, quantidade, motivo da devolução, NF de devolução e situação. Dá para abrir já preenchido a partir de um item do recebimento.
+- **Divergências** — pendências de nota fiscal: nota, produto, distribuidora, quantidade, **lote**, **código de barras**, motivo da devolução, NF de devolução e situação. Lote e código de barras entram na busca. Dá para abrir já preenchido a partir do recebimento ou da aba Validade.
 - **Escala mensal** — importa a planilha de escala que a farmácia já usa (grade funcionário × dia) e gera a contagem de turnos por pessoa (ver abaixo).
+- **Validade** — produtos vigiados por vencimento (ver abaixo).
 - **Configurações** — mínimos por turno/categoria, turnos, categorias, feriados, backup (exportar/importar) e **banco de dados de teste**.
 
 ## Leitura de documentos no recebimento
@@ -74,3 +75,9 @@ A aba lê a planilha no formato que a farmácia já usa — uma linha por funcio
 **A escala mensal manda no dia a dia.** O horário de cada pessoa muda conforme o dia, então, para as datas de um mês importado, a aba Escala usa o turno da grade (`H0x` com o horário oficial; `F`/férias/`FF`/`FA` como folga; `*` como domingo escalado). O turno do cadastro do funcionário é apenas o *habitual*, usado como reserva em datas sem escala importada. A importação também cria os turnos que só existem na planilha (ex.: H04, H09), senão quem fosse escalado neles não apareceria na Escala do dia.
 
 Saídas: grade colorida do mês, **contagem por funcionário** (quantos dias em cada turno, folgas, domingos, férias, dias trabalhados), export CSV e o botão **Cadastrar funcionários**, que cria as pessoas na aba Funcionários com a função da planilha e o turno em que cada uma mais trabalhou. Folga fixa só é atribuída quando cai no mesmo dia da semana 3+ vezes — nessa escala a folga é rodiziada.
+
+## Validade (alerta de vencimento)
+
+Cadastre o que precisa de atenção — produto, **validade**, lote, código de barras, quantidade, distribuidora e onde está — e o app marca quando entra na janela de alerta, **45 dias por padrão** (configurável de 1 a 365). A tabela separa *vencidos*, *em alerta* e *em dia*, e cada item vencido abre uma divergência já preenchida (produto, lote, código de barras e motivo).
+
+**Como o aviso chega:** este app não tem servidor, então **não existe notificação push de celular**. O aviso acontece quando o app é aberto, em três lugares: um selo vermelho com a contagem na aba *Validade*, faixas no topo da aba e — se você autorizar — uma notificação do navegador (uma por dia, com o app aberto). Para não escapar, vale fixar o app na tela inicial e conferir a aba marcada.
