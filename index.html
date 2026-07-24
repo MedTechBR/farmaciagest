@@ -1469,6 +1469,96 @@ function confirmarEscalaMensal(p,arq){
   };
 }
 
+/* ---------- cadastrar os funcionários da planilha no app ----------
+   Cria as categorias (função da planilha), os turnos H01..H09 com os
+   horários oficiais e um funcionário por linha, usando o turno em que
+   a pessoa mais trabalhou no mês como turno padrão. Não duplica: quem
+   já existe é atualizado. */
+const HRANGE={
+  H01:['06:50','14:40'], H02:['08:10','16:00'], H03:['10:10','18:00'], H04:['12:10','20:00'],
+  H05:['13:10','21:00'], H06:['14:30','22:20'], H07:['15:30','23:20'],
+  H08:['09:00','19:00'], H09:['09:30','19:20']
+};
+function catIdPorNome(nome){
+  const alvo=norm(nome);
+  let c=CATS.find(c=>norm(c.nome)===alvo);
+  if(c)return c.id;
+  // singular do rótulo da planilha: "BALCONISTAS" -> "Balconista"
+  let bonito=nome.trim().toLowerCase().replace(/^\w/,ch=>ch.toUpperCase());
+  if(/s$/i.test(bonito)&&bonito.length>3)bonito=bonito.replace(/es$/i,'').replace(/s$/i,'');
+  c=CATS.find(c=>norm(c.nome)===norm(bonito));
+  if(c)return c.id;
+  const id=uid(); CATS.push({id,nome:bonito}); return id;
+}
+function turnoIdPorCodigo(cod){
+  let t=TURNOS.find(t=>norm(t.nome)===norm(cod)||t.id===cod);
+  if(t)return t.id;
+  const h=HRANGE[cod]||['00:00','00:00'];
+  const id=cod; TURNOS.push({id,nome:cod,ini:h[0],fim:h[1]}); return id;
+}
+// dia da semana em que a pessoa mais folga (só vira folga fixa se for padrão claro)
+function folgasFixas(f,mes,ano){
+  const cont={};
+  f.dias.forEach((d,i)=>{
+    if(d.t!=='folga')return;
+    const wd=new Date(ano,mes,i+1).getDay();
+    cont[wd]=(cont[wd]||0)+1;
+  });
+  const out=[];
+  Object.keys(cont).forEach(wd=>{ if(cont[wd]>=3)out.push(+wd); });  // 3+ vezes no mesmo dia = fixo
+  return out;
+}
+function cadastrarFuncsDoMes(mes){
+  const prev=[];
+  mes.funcs.forEach(f=>{
+    const t=tallyFunc(f);
+    const cods=Object.keys(t.turnos).sort((a,b)=>t.turnos[b]-t.turnos[a]);
+    const principal=cods[0]||'';
+    const existe=FUNCS.find(x=>norm(x.nome)===norm(f.nome));
+    prev.push({f,t,principal,folgas:folgasFixas(f,mes.mesNum,mes.ano),existe:!!existe});
+  });
+  const novos=prev.filter(p=>!p.existe).length, atualiza=prev.length-novos;
+  let body='<p class="hint" style="margin-top:0">De <b>'+esc(mes.nome)+'</b>: <b>'+novos+'</b> funcionário(s) novo(s)'
+    +(atualiza?' e <b>'+atualiza+'</b> já cadastrado(s) que serão atualizados':'')+'.</p>'
+    +'<p class="hint" style="margin:0 0 12px">O <b>turno padrão</b> é aquele em que a pessoa mais trabalhou no mês. A <b>folga fixa</b> só é marcada quando cai no mesmo dia da semana pelo menos 3 vezes — na sua escala a folga é rodiziada, então é normal ficar em branco.</p>'
+    +'<div class="tbl-wrap scroll-y" style="max-height:40vh"><table class="mini-tbl"><thead><tr>'
+    +'<th style="width:34px"><span class="sr-only">Incluir</span></th><th>Nome</th><th>Função</th><th>Turno padrão</th><th>Folga fixa</th></tr></thead><tbody>';
+  prev.forEach((p,i)=>{
+    body+='<tr><td><input type="checkbox" class="cdUsar" data-i="'+i+'" checked aria-label="Cadastrar '+esc(p.f.nome)+'"></td>'
+      +'<td>'+esc(p.f.nome)+(p.existe?' <span class="tag gray">já existe</span>':'')+'</td>'
+      +'<td>'+esc(p.f.func||'—')+'</td>'
+      +'<td>'+(p.principal?esc(p.principal)+' <span class="muted">'+(HTIMES[p.principal]||'')+'</span>':'<span class="muted">sem turno (férias)</span>')+'</td>'
+      +'<td>'+(p.folgas.length?p.folgas.map(d=>DOW_S[d]).join(', '):'<span class="muted">—</span>')+'</td></tr>';
+  });
+  body+='</tbody></table></div>';
+  openModal('Cadastrar funcionários','ti-user-plus',body,
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-primary btn-sm" id="cdOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Cadastrar</button>');
+  $('#cdOk').onclick=()=>{
+    let criados=0,atualizados=0;
+    $$('.cdUsar').forEach(c=>{
+      if(!c.checked)return;
+      const p=prev[+c.dataset.i];
+      const catId=p.f.func?catIdPorNome(p.f.func):(CATS[0]?CATS[0].id:catIdPorNome('Geral'));
+      const turnoId=p.principal?turnoIdPorCodigo(p.principal):(TURNOS[0]?TURNOS[0].id:turnoIdPorCodigo('H01'));
+      const t=turnoOf(turnoId)||{ini:'',fim:''};
+      const ja=FUNCS.find(x=>norm(x.nome)===norm(p.f.nome));
+      if(ja){
+        ja.catId=catId; ja.turnoId=turnoId; ja.entrada=t.ini; ja.saida=t.fim;
+        if(p.folgas.length)ja.folgas=p.folgas.slice();
+        atualizados++;
+      }else{
+        FUNCS.push({id:uid(),nome:p.f.nome,catId,turnoId,entrada:t.ini,saida:t.fim,
+          folgas:p.folgas.slice(),horaExtra:false,folgaFeriado:false,saldoInicial:0});
+        criados++;
+      }
+    });
+    if(!criados&&!atualizados){ toast('Ninguém selecionado','err'); return; }
+    ensureMinimos(); saveAll(); closeModal(); selectTab('func');
+    toast(criados+' cadastrado(s)'+(atualizados?' · '+atualizados+' atualizado(s)':''),'ok');
+  };
+}
+
 /* ---------- render ---------- */
 function renderMensal(){
   const el=$('#tab-mensal');
@@ -1495,6 +1585,7 @@ function renderMensal(){
     +MENSAL.slice().sort((a,b)=>(b.ano-a.ano)||(b.mesNum-a.mesNum)).map(m=>'<option value="'+m.id+'"'+(m.id===mesSelId?' selected':'')+'>'+esc(m.nome)+'</option>').join('')
     +'</select></div>'
     +'<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">'
+    +'<button class="btn btn-primary btn-sm" id="menCad" type="button"><i class="ti ti-user-plus" aria-hidden="true"></i> Cadastrar funcionários</button>'
     +'<button class="btn btn-ghost btn-sm" id="menCSV" type="button"><i class="ti ti-download" aria-hidden="true"></i> Baixar contagem (CSV)</button>'
     +'<button class="btn btn-danger btn-sm" id="menDel" type="button"><i class="ti ti-trash" aria-hidden="true"></i> Excluir mês</button></div></div>';
 
@@ -1568,6 +1659,7 @@ function renderMensal(){
     MENSAL=MENSAL.filter(m=>m.id!==mes.id); mesSelId=null; saveAll(); renderMensal(); toast('Escala removida');
   };
   $('#menCSV').onclick=()=>baixarContagemCSV(mes);
+  $('#menCad').onclick=()=>cadastrarFuncsDoMes(mes);
   const bs=$('#menBusca');
   if(bs){
     bs.oninput=e=>{
