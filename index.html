@@ -1899,46 +1899,41 @@ async function textoDoPDF(file,prog){
   }
   return txt;
 }
-/* Foto de nota costuma vir torta, com sombra e resolução baixa. Tratar a imagem
-   antes do OCR melhora muito o acerto: ampliar, tirar a cor, achatar a sombra
-   (limiar local) e aumentar o contraste. */
-function prepararImagem(file,escala){
+/* Foto de nota vem com sombra e iluminação irregular — é o que mais faz o
+   OCR perder quantidade. A correção que se mostrou melhor nos testes foi
+   dividir cada pixel pela iluminação local (janela grande, que estima o
+   fundo sem apagar a letra). Testado contra a alternativa de ampliar e de
+   binarizar: ambas PIORARAM o reconhecimento, então não são usadas. */
+function corrigirIluminacao(file){
   return new Promise((ok,err)=>{
     const img=new Image(), url=URL.createObjectURL(file);
     img.onload=()=>{
       URL.revokeObjectURL(url);
-      // texto pequeno é o que mais erra: alvo ~1800px no lado maior
-      const alvo=1800, lado=Math.max(img.width,img.height);
-      const f=escala||Math.min(3,Math.max(1,alvo/lado));
-      const w=Math.round(img.width*f), h=Math.round(img.height*f);
+      const w=img.width, h=img.height;
+      if(!w||!h){ err(new Error('Imagem sem conteúdo.')); return; }
       const c=document.createElement('canvas'); c.width=w; c.height=h;
       const x=c.getContext('2d',{willReadFrequently:true});
-      x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
-      x.drawImage(img,0,0,w,h);
-      const d=x.getImageData(0,0,w,h), px=d.data;
-      // 1) cinza (luminância) numa matriz auxiliar
-      const g=new Float32Array(w*h);
+      x.drawImage(img,0,0);
+      const d=x.getImageData(0,0,w,h), px=d.data, g=new Float32Array(w*h);
       for(let i=0,j=0;i<px.length;i+=4,j++) g[j]=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
-      // 2) média local por janela (integral image) = limiar adaptativo contra sombra
+      // soma acumulada (integral image) para média local em tempo constante
       const S=new Float64Array((w+1)*(h+1));
       for(let y=0;y<h;y++){ let lin=0;
         for(let xx=0;xx<w;xx++){ lin+=g[y*w+xx]; S[(y+1)*(w+1)+(xx+1)]=S[y*(w+1)+(xx+1)]+lin; } }
-      const r=Math.max(8,Math.round(Math.min(w,h)/40));   // raio da janela
+      const r=Math.max(20,Math.round(Math.min(w,h)/3));   // janela grande = iluminação, não a letra
       for(let y=0;y<h;y++){
         const y0=Math.max(0,y-r), y1=Math.min(h-1,y+r);
         for(let xx=0;xx<w;xx++){
           const x0=Math.max(0,xx-r), x1=Math.min(w-1,xx+r);
           const area=(x1-x0+1)*(y1-y0+1);
           const soma=S[(y1+1)*(w+1)+(x1+1)]-S[y0*(w+1)+(x1+1)]-S[(y1+1)*(w+1)+x0]+S[y0*(w+1)+x0];
-          const media=soma/area, v=g[y*w+xx];
-          // 3) mantém cinza suave perto do limiar (o Tesseract lida melhor que com binário duro)
-          const dif=v-media*0.92;
-          let out= dif>12 ? 255 : (dif<-12 ? 0 : Math.max(0,Math.min(255,128+dif*10)));
+          const fundo=Math.max(1,soma/area), v=g[y*w+xx];
+          const out=Math.max(0,Math.min(255, 255*(v/fundo)*0.92 ));
           const i=(y*w+xx)*4; px[i]=px[i+1]=px[i+2]=out; px[i+3]=255;
         }
       }
       x.putImageData(d,0,0);
-      c.toBlob(b=>ok({blob:b,w,h}),'image/png');
+      c.toBlob(b=>b?ok(b):err(new Error('Falha ao preparar a imagem.')),'image/png');
     };
     img.onerror=()=>{ URL.revokeObjectURL(url); err(new Error('Não consegui abrir a imagem.')); };
     img.src=url;
@@ -1947,23 +1942,19 @@ function prepararImagem(file,escala){
 async function textoDaImagem(file,prog){
   prog('Carregando o leitor de imagem…');
   await carregarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-  prog('Tratando a imagem (contraste e nitidez)…');
-  let alvo=file;
-  try{ const pre=await prepararImagem(file); if(pre&&pre.blob)alvo=pre.blob; }
-  catch(e){ /* se o tratamento falhar, lê a imagem original mesmo */ }
   const log=m=>{
     if(m.status==='recognizing text')prog('Lendo a imagem… '+Math.round((m.progress||0)*100)+'%');
     else if(String(m.status).indexOf('traineddata')>=0)prog('Baixando o idioma português (só na primeira vez)…');
   };
-  // 6 = bloco uniforme de texto: é o que mais acerta em nota/pedido
-  const opts={logger:log,tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'};
-  let r=await Tesseract.recognize(alvo,'por',opts);
-  let txt=(r.data&&r.data.text)||'';
-  // pouca coisa reconhecida? tenta de novo tratando a página como texto esparso
+  prog('Corrigindo a iluminação da foto…');
+  let tratada=null;
+  try{ tratada=await corrigirIluminacao(file); }catch(e){ /* segue com a original */ }
+  let txt=tratada ? ((await Tesseract.recognize(tratada,'por',{logger:log})).data.text||'') : '';
+  // se o tratamento não rendeu, tenta a foto como veio (algumas já vêm boas)
   if(txt.replace(/\s/g,'').length<20){
-    prog('Tentando outra leitura…');
-    r=await Tesseract.recognize(alvo,'por',{logger:log,tessedit_pageseg_mode:'11'});
-    txt=(r.data&&r.data.text)||txt;
+    prog('Tentando a foto original…');
+    const r2=await Tesseract.recognize(file,'por',{logger:log});
+    if(((r2.data.text||'').replace(/\s/g,'').length)>txt.replace(/\s/g,'').length) txt=r2.data.text||txt;
   }
   return txt;
 }
