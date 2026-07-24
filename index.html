@@ -1488,13 +1488,19 @@ function catIdPorNome(nome){
   if(/s$/i.test(bonito)&&bonito.length>3)bonito=bonito.replace(/es$/i,'').replace(/s$/i,'');
   c=CATS.find(c=>norm(c.nome)===norm(bonito));
   if(c)return c.id;
-  const id=uid(); CATS.push({id,nome:bonito}); return id;
+  const id=uid(); CATS.push({id,nome:bonito});
+  TURNOS.forEach(t=>{ if(!MINIMOS[t.id])MINIMOS[t.id]={}; MINIMOS[t.id][id]=0; });
+  return id;
 }
 function turnoIdPorCodigo(cod){
   let t=TURNOS.find(t=>norm(t.nome)===norm(cod)||t.id===cod);
   if(t)return t.id;
   const h=HRANGE[cod]||['00:00','00:00'];
-  const id=cod; TURNOS.push({id,nome:cod,ini:h[0],fim:h[1]}); return id;
+  const id=cod; TURNOS.push({id,nome:cod,ini:h[0],fim:h[1]});
+  // turno novo nasce sem exigência de cobertura: quem define o mínimo é o usuário,
+  // senão a Escala diária acusaria desfalque em todo turno recém-criado
+  MINIMOS[id]={}; CATS.forEach(c=>{ MINIMOS[id][c.id]=0; });
+  return id;
 }
 // dia da semana em que a pessoa mais folga (só vira folga fixa se for padrão claro)
 function folgasFixas(f,mes,ano){
@@ -1554,7 +1560,16 @@ function cadastrarFuncsDoMes(mes){
       }
     });
     if(!criados&&!atualizados){ toast('Ninguém selecionado','err'); return; }
-    ensureMinimos(); saveAll(); closeModal(); selectTab('func');
+    ensureMinimos(); saveAll();
+    // turnos antigos que ninguém usa mais só atrapalham a cobertura mínima
+    const orfaos=TURNOS.filter(t=>!FUNCS.some(f=>f.turnoId===t.id));
+    if(orfaos.length&&TURNOS.length>orfaos.length&&
+       confirm('Cadastro concluído.\n\nSobrou(ram) '+orfaos.length+' turno(s) que ninguém usa ('+orfaos.map(t=>t.nome).join(', ')+').\n\nRemover?')){
+      orfaos.forEach(t=>{ delete MINIMOS[t.id]; });
+      TURNOS=TURNOS.filter(t=>FUNCS.some(f=>f.turnoId===t.id));
+      saveAll();
+    }
+    closeModal(); selectTab('func');
     toast(criados+' cadastrado(s)'+(atualizados?' · '+atualizados+' atualizado(s)':''),'ok');
   };
 }
