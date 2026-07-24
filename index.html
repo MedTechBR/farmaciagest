@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#059669">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>FarmáciaGest — Gestão de escala da farmácia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -384,7 +387,7 @@ table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;whit
   <section id="tab-receb" role="tabpanel" aria-labelledby="tb-receb" tabindex="-1" style="display:none"></section>
   <section id="tab-diverg" role="tabpanel" aria-labelledby="tb-diverg" tabindex="-1" style="display:none"></section>
   <section id="tab-config" role="tabpanel" aria-labelledby="tb-config" tabindex="-1" style="display:none"></section>
-  <div class="footer">FarmáciaGest • os dados ficam salvos apenas neste navegador (localStorage). Use “Backup” nas Configurações para exportar.</div>
+  <div class="footer">FarmáciaGest <span class="muted num" id="verTag"></span> • os dados ficam salvos apenas neste navegador (localStorage). Use “Backup” nas Configurações para exportar.</div>
 </div>
 <div id="modalRoot"></div>
 
@@ -594,7 +597,23 @@ $('#themeBtn').onclick=()=>{
   TEMA = escuro?'light':'dark';
   saveLS('fg_tema',TEMA); applyTheme(TEMA);
 };
-function render(){
+const APP_VER='2026.07.24-6';
+function render(){ try{ renderInterno(); }catch(e){ falhaNaTela(e); } }
+function falhaNaTela(e){
+  const el=$('#tab-'+activeTab); if(!el)return;
+  console.error('Falha ao montar a aba '+activeTab,e);
+  el.innerHTML='<div class="card"><div class="alert danger"><i class="ti ti-alert-triangle" aria-hidden="true"></i><div>'
+    +'<b>Não consegui montar esta aba.</b><br>Isso costuma ser versão antiga guardada no navegador. '
+    +'Toque em <b>Recarregar</b>; se persistir, use Configurações → Backup para exportar seus dados antes de qualquer coisa.'
+    +'<div class="muted num" style="font-size:11.5px;margin-top:8px">'+esc(String(e&&e.message||e))+' · versão '+APP_VER+'</div>'
+    +'</div></div><div class="row-actions" style="margin-top:0">'
+    +'<button class="btn btn-primary btn-sm" onclick="recarregarLimpo()"><i class="ti ti-refresh" aria-hidden="true"></i> Recarregar</button></div></div>';
+}
+function recarregarLimpo(){
+  const u=location.origin+location.pathname+'?v='+Date.now();
+  location.replace(u);
+}
+function renderInterno(){
   if(activeTab==='func')renderFunc();
   else if(activeTab==='dia')renderDia();
   else if(activeTab==='trocas')renderTrocas();
@@ -1880,15 +1899,119 @@ async function textoDoPDF(file,prog){
   }
   return txt;
 }
+/* Foto de nota costuma vir torta, com sombra e resolução baixa. Tratar a imagem
+   antes do OCR melhora muito o acerto: ampliar, tirar a cor, achatar a sombra
+   (limiar local) e aumentar o contraste. */
+function prepararImagem(file,escala){
+  return new Promise((ok,err)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      // texto pequeno é o que mais erra: alvo ~1800px no lado maior
+      const alvo=1800, lado=Math.max(img.width,img.height);
+      const f=escala||Math.min(3,Math.max(1,alvo/lado));
+      const w=Math.round(img.width*f), h=Math.round(img.height*f);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const x=c.getContext('2d',{willReadFrequently:true});
+      x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+      x.drawImage(img,0,0,w,h);
+      const d=x.getImageData(0,0,w,h), px=d.data;
+      // 1) cinza (luminância) numa matriz auxiliar
+      const g=new Float32Array(w*h);
+      for(let i=0,j=0;i<px.length;i+=4,j++) g[j]=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+      // 2) média local por janela (integral image) = limiar adaptativo contra sombra
+      const S=new Float64Array((w+1)*(h+1));
+      for(let y=0;y<h;y++){ let lin=0;
+        for(let xx=0;xx<w;xx++){ lin+=g[y*w+xx]; S[(y+1)*(w+1)+(xx+1)]=S[y*(w+1)+(xx+1)]+lin; } }
+      const r=Math.max(8,Math.round(Math.min(w,h)/40));   // raio da janela
+      for(let y=0;y<h;y++){
+        const y0=Math.max(0,y-r), y1=Math.min(h-1,y+r);
+        for(let xx=0;xx<w;xx++){
+          const x0=Math.max(0,xx-r), x1=Math.min(w-1,xx+r);
+          const area=(x1-x0+1)*(y1-y0+1);
+          const soma=S[(y1+1)*(w+1)+(x1+1)]-S[y0*(w+1)+(x1+1)]-S[(y1+1)*(w+1)+x0]+S[y0*(w+1)+x0];
+          const media=soma/area, v=g[y*w+xx];
+          // 3) mantém cinza suave perto do limiar (o Tesseract lida melhor que com binário duro)
+          const dif=v-media*0.92;
+          let out= dif>12 ? 255 : (dif<-12 ? 0 : Math.max(0,Math.min(255,128+dif*10)));
+          const i=(y*w+xx)*4; px[i]=px[i+1]=px[i+2]=out; px[i+3]=255;
+        }
+      }
+      x.putImageData(d,0,0);
+      c.toBlob(b=>ok({blob:b,w,h}),'image/png');
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); err(new Error('Não consegui abrir a imagem.')); };
+    img.src=url;
+  });
+}
 async function textoDaImagem(file,prog){
   prog('Carregando o leitor de imagem…');
   await carregarScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-  const r=await Tesseract.recognize(file,'por',{logger:m=>{
+  prog('Tratando a imagem (contraste e nitidez)…');
+  let alvo=file;
+  try{ const pre=await prepararImagem(file); if(pre&&pre.blob)alvo=pre.blob; }
+  catch(e){ /* se o tratamento falhar, lê a imagem original mesmo */ }
+  const log=m=>{
     if(m.status==='recognizing text')prog('Lendo a imagem… '+Math.round((m.progress||0)*100)+'%');
     else if(String(m.status).indexOf('traineddata')>=0)prog('Baixando o idioma português (só na primeira vez)…');
-  }});
-  return r.data.text||'';
+  };
+  // 6 = bloco uniforme de texto: é o que mais acerta em nota/pedido
+  const opts={logger:log,tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'};
+  let r=await Tesseract.recognize(alvo,'por',opts);
+  let txt=(r.data&&r.data.text)||'';
+  // pouca coisa reconhecida? tenta de novo tratando a página como texto esparso
+  if(txt.replace(/\s/g,'').length<20){
+    prog('Tentando outra leitura…');
+    r=await Tesseract.recognize(alvo,'por',{logger:log,tessedit_pageseg_mode:'11'});
+    txt=(r.data&&r.data.text)||txt;
+  }
+  return txt;
 }
+/* Planilha de pedido: em vez de adivinhar linha a linha, procura as colunas
+   (produto / quantidade / distribuidora) pelo cabeçalho. */
+function itensDaPlanilha(rows){
+  rows=(rows||[]).filter(r=>r&&r.some(c=>String(c==null?'':c).trim()!==''));
+  if(!rows.length)return null;
+  const RE_PROD=/(produto|descri|mercadoria|item|material|medicament)/i;
+  const RE_QTD=/(qtd|quant|volume|caixas|unid)/i;
+  const RE_DIST=/(distribuidor|fornecedor|laborat|emitente|empresa)/i;
+  const RE_NF=/(nota|nf\b|nfe|documento)/i;
+  // cabeçalho = primeira linha (das 10 primeiras) que tenha coluna de produto
+  let hIdx=-1,cProd=-1,cQtd=-1,cDist=-1,cNF=-1;
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const cels=rows[i].map(c=>String(c==null?'':c).trim());
+    const p=cels.findIndex(c=>RE_PROD.test(c));
+    if(p<0)continue;
+    hIdx=i; cProd=p;
+    cQtd=cels.findIndex(c=>RE_QTD.test(c));
+    cDist=cels.findIndex(c=>RE_DIST.test(c));
+    cNF=cels.findIndex(c=>RE_NF.test(c));
+    break;
+  }
+  const itens=[];
+  if(hIdx>=0){
+    for(let i=hIdx+1;i<rows.length;i++){
+      const r=rows[i];
+      const nome=String(r[cProd]==null?'':r[cProd]).trim();
+      if(!nome||!/[A-Za-zÀ-ÿ]{3,}/.test(nome))continue;
+      if(LINHA_LIXO.test(nome))continue;
+      const q=cQtd>=0?parseInt(String(r[cQtd]).replace(/[^\d]/g,''),10):NaN;
+      itens.push({nome,qtd:Math.max(1,isNaN(q)?1:q),
+        dist:cDist>=0?String(r[cDist]==null?'':r[cDist]).trim():'',usar:true});
+    }
+    if(itens.length){
+      const dist=cDist>=0?(itens.find(i=>i.dist)||{}).dist||'':'';
+      let nf='';
+      if(cNF>=0)for(let i=hIdx+1;i<rows.length;i++){ const v=String(rows[i][cNF]==null?'':rows[i][cNF]).replace(/\D/g,''); if(v){nf=v;break;} }
+      return {dist,nf,itens,viaCabecalho:true};
+    }
+  }
+  // sem cabeçalho reconhecível: cai na leitura por linha, como texto
+  const txt=rows.map(r=>r.map(c=>String(c==null?'':c).trim()).filter(Boolean).join('  ')).join('\n');
+  const it=itensDoTexto(txt);
+  return it.length?{dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:it,viaCabecalho:false}:null;
+}
+
 // NF-e em XML é o caminho exato: nada de heurística
 function itensDoXML(txt){
   let doc; try{ doc=new DOMParser().parseFromString(txt,'text/xml'); }catch(e){ return null; }
@@ -2008,6 +2131,11 @@ async function lerDocumento(file){
       txt=await textoDoPDF(file,prog);
       if(!txt.trim())throw new Error('Esse PDF não tem texto — provavelmente é digitalizado. Tire uma foto dele e anexe como imagem, ou cole o texto.');
       extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
+    }else if(/\.(xlsx|xlsb|xls)$/.test(nome)){
+      const rows=await readWorkbook(file);
+      extraido=itensDaPlanilha(rows);
+      if(!extraido)throw new Error('Não achei produtos nesta planilha. Confira se há uma coluna com o nome do produto (ex.: "Produto" ou "Descrição").');
+      txt=(rows||[]).map(r=>r.join('  ')).join('\n');
     }else if(/^image\//.test(file.type)||/\.(png|jpe?g|webp|bmp|gif)$/.test(nome)){
       txt=await textoDaImagem(file,prog);
       extraido={dist:distDoTexto(txt),nf:nfDoTexto(txt),itens:itensDoTexto(txt)};
@@ -2121,11 +2249,11 @@ function renderReceb(){
     +'<p class="hint">Anexe a nota, o pedido ou uma foto. O app lê o documento aqui no navegador, lista os produtos para você conferir e depois é só ir marcando o que chegou.</p>'
     +'<div class="drop" id="recDrop" role="button" tabindex="0" aria-label="Escolher arquivo para ler">'
     +'<i class="ti ti-cloud-upload" aria-hidden="true"></i><p>Arraste o arquivo aqui ou clique para escolher</p>'
-    +'<small>XML da NF-e (leitura exata) · PDF · imagem/foto · TXT/CSV</small>'
-    +'<input type="file" id="recFile" accept=".xml,.pdf,.txt,.csv,image/*" style="display:none"></div>'
+    +'<small>XML da NF-e (leitura exata) · Excel · PDF · imagem/foto · TXT/CSV</small>'
+    +'<input type="file" id="recFile" accept=".xml,.xlsx,.xlsb,.xls,.pdf,.txt,.csv,image/*" style="display:none"></div>'
     +'<div class="row-actions"><button class="btn btn-ghost btn-sm" id="recColar" type="button"><i class="ti ti-clipboard" aria-hidden="true"></i> Colar texto</button>'
     +'<button class="btn btn-ghost btn-sm" id="recManual" type="button"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar produto</button></div>'
-    +'<p class="hint" style="margin:14px 0 0"><b>O que funciona melhor:</b> XML da NF-e sai exato. PDF só é lido se tiver texto (PDF digitalizado não tem). Foto passa por reconhecimento e costuma errar caracteres — por isso a lista sempre aparece para conferência antes de entrar. O arquivo não fica salvo, só os itens.</p>'
+    +'<p class="hint" style="margin:14px 0 0"><b>O que funciona melhor:</b> XML da NF-e e Excel saem exatos (na planilha, basta ter uma coluna de produto — quantidade e distribuidora são reconhecidas se existirem). PDF só é lido se tiver texto (PDF digitalizado não tem). Foto passa por tratamento de imagem e reconhecimento, mas ainda erra caracteres — por isso a lista sempre aparece para conferência. O arquivo não fica salvo, só os itens.</p>'
     +'</div>';
 
   if(total){
@@ -2477,6 +2605,7 @@ function renderConfig(){
 }
 
 /* ================= start ================= */
+{ const v=$('#verTag'); if(v)v.textContent='v'+APP_VER; }
 ensureTurnosDasEscalas();
 render();
 </script>
