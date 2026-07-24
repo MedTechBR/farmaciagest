@@ -237,6 +237,34 @@ tr:last-child td{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
 
+/* ================= escala mensal ================= */
+table.grid-tally, table.grid-escala{border-collapse:separate;border-spacing:0;font-size:13px;min-width:max-content}
+table.grid-tally th, table.grid-tally td, table.grid-escala th, table.grid-escala td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:7px 9px;background:var(--surface)}
+table.grid-tally .stik, table.grid-escala .stik{position:sticky;left:0;z-index:2;text-align:left;min-width:150px;box-shadow:1px 0 0 var(--line)}
+table.grid-tally thead th, table.grid-escala thead th{position:sticky;top:0;z-index:1;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700;white-space:nowrap}
+table.grid-tally thead .stik, table.grid-escala thead .stik{z-index:3}
+table.grid-escala th.dom{color:var(--danger)}
+table.grid-escala thead th span{display:block;font-size:9px;font-weight:600;opacity:.7}
+table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;white-space:nowrap;min-width:34px}
+.cel.turno{color:var(--ink)}
+.cel.folga{background:var(--warn-soft);color:var(--warn)}
+.cel.domingo{background:var(--brand-soft);color:var(--brand-dark)}
+.cel.ferias{background:#dcfce7;color:#15803d}
+.cel.feriado{background:var(--danger-soft);color:var(--danger)}
+.cel.aniv{background:#f3e8ff;color:#7e22ce}
+.cel.outro{background:var(--surface-2);color:var(--muted)}
+.cel-leg{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-weight:600;border:1px solid var(--line)}
+.cel-leg.folga{background:var(--warn-soft);color:var(--warn)}
+.cel-leg.domingo{background:var(--brand-soft);color:var(--brand-dark)}
+.cel-leg.ferias{background:#dcfce7;color:#15803d}
+.cel-leg.feriado{background:var(--danger-soft);color:var(--danger)}
+.cel-leg.aniv{background:#f3e8ff;color:#7e22ce}
+.cel-leg.turno{background:var(--surface-2);color:var(--ink)}
+:root[data-theme="dark"] .cel.ferias, :root[data-theme="dark"] .cel-leg.ferias{background:#14351f;color:#4ade80}
+:root[data-theme="dark"] .cel.aniv, :root[data-theme="dark"] .cel-leg.aniv{background:#2a1840;color:#c084fc}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .cel.ferias,:root:not([data-theme="light"]) .cel-leg.ferias{background:#14351f;color:#4ade80}
+:root:not([data-theme="light"]) .cel.aniv,:root:not([data-theme="light"]) .cel-leg.aniv{background:#2a1840;color:#c084fc}}
+
 /* ================= recebimento ================= */
 .prog{height:8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
 .prog i{display:block;height:100%;background:var(--brand-solid);transition:width .3s}
@@ -331,6 +359,7 @@ tr:last-child td{border-bottom:none}
   <button data-tab="dia" role="tab" aria-selected="false" aria-controls="tab-dia" id="tb-dia" tabindex="-1"><i class="ti ti-calendar-week" aria-hidden="true"></i> Escala</button>
   <button data-tab="trocas" role="tab" aria-selected="false" aria-controls="tab-trocas" id="tb-trocas" tabindex="-1"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Trocas</button>
   <button data-tab="banco" role="tab" aria-selected="false" aria-controls="tab-banco" id="tb-banco" tabindex="-1"><i class="ti ti-clock-hour-4" aria-hidden="true"></i> Banco de horas</button>
+  <button data-tab="mensal" role="tab" aria-selected="false" aria-controls="tab-mensal" id="tb-mensal" tabindex="-1"><i class="ti ti-calendar-month" aria-hidden="true"></i> Escala mensal</button>
   <button data-tab="receb" role="tab" aria-selected="false" aria-controls="tab-receb" id="tb-receb" tabindex="-1"><i class="ti ti-package-import" aria-hidden="true"></i> Recebimento</button>
   <button data-tab="diverg" role="tab" aria-selected="false" aria-controls="tab-diverg" id="tb-diverg" tabindex="-1"><i class="ti ti-file-alert" aria-hidden="true"></i> Divergências</button>
   <button data-tab="config" role="tab" aria-selected="false" aria-controls="tab-config" id="tb-config" tabindex="-1"><i class="ti ti-settings" aria-hidden="true"></i> Configurações</button>
@@ -340,6 +369,7 @@ tr:last-child td{border-bottom:none}
   <section id="tab-dia" role="tabpanel" aria-labelledby="tb-dia" tabindex="-1" style="display:none"></section>
   <section id="tab-trocas" role="tabpanel" aria-labelledby="tb-trocas" tabindex="-1" style="display:none"></section>
   <section id="tab-banco" role="tabpanel" aria-labelledby="tb-banco" tabindex="-1" style="display:none"></section>
+  <section id="tab-mensal" role="tabpanel" aria-labelledby="tb-mensal" tabindex="-1" style="display:none"></section>
   <section id="tab-receb" role="tabpanel" aria-labelledby="tb-receb" tabindex="-1" style="display:none"></section>
   <section id="tab-diverg" role="tabpanel" aria-labelledby="tb-diverg" tabindex="-1" style="display:none"></section>
   <section id="tab-config" role="tabpanel" aria-labelledby="tb-config" tabindex="-1" style="display:none"></section>
@@ -384,6 +414,7 @@ let CATS = loadLS('fg_cats', [
   {id:'entregador',nome:'Entregador'},
   {id:'caixa',nome:'Operador de Caixa'},
 ]);
+let MENSAL = loadLS('fg_mensal',  []); // escalas mensais importadas do Excel
 let RECEB  = loadLS('fg_receb',   []); // itens a receber: {id,nome,dist,qtd,recebido,quando,obs,docId,nf}
 let RECDOC = loadLS('fg_recdoc',  []); // documentos lidos: {id,arquivo,dist,nf,data,itens}
 let DIVERG = loadLS('fg_diverg',  []); // divergências: {id,nf,produto,dist,qtd,motivo,nfDev,data,status}
@@ -395,7 +426,7 @@ ensureMinimos();
 function saveAll(){
   saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
   saveLS('fg_feriados',FERIAS);saveLS('fg_turnos',TURNOS);saveLS('fg_cats',CATS);saveLS('fg_minimos',MINIMOS);
-  saveLS('fg_receb',RECEB);saveLS('fg_recdoc',RECDOC);saveLS('fg_diverg',DIVERG);
+  saveLS('fg_receb',RECEB);saveLS('fg_recdoc',RECDOC);saveLS('fg_diverg',DIVERG);saveLS('fg_mensal',MENSAL);
 }
 const catName=id=>{const c=CATS.find(c=>c.id===id);return c?c.nome:'Sem categoria';};
 const turnoOf=id=>TURNOS.find(t=>t.id===id)||null;
@@ -457,7 +488,7 @@ function shortages(dateStr){
 
 /* ================= navegação ================= */
 let activeTab='func';
-const TABS=['func','dia','trocas','banco','receb','diverg','config'];
+const TABS=['func','dia','trocas','banco','mensal','receb','diverg','config'];
 function selectTab(name,focus){
   activeTab=name;
   $$('#tabs button').forEach(x=>{
@@ -501,6 +532,7 @@ function render(){
   else if(activeTab==='dia')renderDia();
   else if(activeTab==='trocas')renderTrocas();
   else if(activeTab==='banco')renderBanco();
+  else if(activeTab==='mensal')renderMensal();
   else if(activeTab==='receb')renderReceb();
   else if(activeTab==='diverg')renderDiverg();
   else if(activeTab==='config')renderConfig();
@@ -1241,6 +1273,338 @@ function renderBanco(){
 }
 
 /* ============================================================
+   ABA: ESCALA MENSAL (importada do Excel do usuário)
+   Lê a planilha no formato dele — matriz funcionário × dia, com
+   turnos H01..H09, F (folga), * (domingo trabalhado), FÉRIAS
+   (soletrado em verde) e FF/FA. Detecta cada situação pelo
+   CONTEÚDO (o SheetJS não lê cor de célula; verificamos que o
+   conteúdo reproduz a cor exatamente). No fim, conta quantas
+   vezes cada funcionário fez cada turno.
+   ============================================================ */
+let buscaMen='', mesSelId=null;
+
+// horários padrão (mensagem do usuário + legenda da planilha); usados só para exibição
+const HTIMES={
+  H01:'06:50–14:40', H02:'08:10–16:00', H03:'10:10–18:00', H04:'12:10–20:00',
+  H05:'13:10–21:00', H06:'14:30–22:20', H07:'15:30–23:20',
+  H08:'09:00–13:00 / 15:00–19:00', H09:'09:30–19:20'
+};
+const MESES_PT=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const DOW_LETRA={0:'D',1:'S',2:'T',3:'Q',4:'Q',5:'S',6:'S'}; // referência
+
+function readWorkbookAll(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader(), isCsv=/\.csv$/i.test(file.name);
+    r.onload=()=>{ try{
+      const wb = isCsv ? XLSX.read(r.result,{type:'string'}) : XLSX.read(new Uint8Array(r.result),{type:'array'});
+      const out={};
+      wb.SheetNames.forEach(n=>{ out[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''}); });
+      res({names:wb.SheetNames,sheets:out});
+    }catch(e){rej(e);} };
+    r.onerror=rej;
+    if(isCsv)r.readAsText(file); else r.readAsArrayBuffer(file);
+  });
+}
+
+const FLET=new Set(['F','E','R','I','A','S']);
+function ehTurno(v){ return /^H\d{1,2}$/.test(v); }
+
+// classifica os códigos de um funcionário (array de strings cruas dos dias)
+function classificarDias(raw){
+  const up=raw.map(v=>String(v==null?'':v).trim().toUpperCase());
+  // marca blocos de FÉRIAS: sequência (>=3) de células com 1 letra ∈ {F,E,R,I,A,S}
+  const fer=up.map(()=>false);
+  let i=0;
+  while(i<up.length){
+    if(up[i].length===1 && FLET.has(up[i])){
+      let j=i; while(j<up.length && up[j].length===1 && FLET.has(up[j])) j++;
+      if(j-i>=3){ for(let k=i;k<j;k++) fer[k]=true; }
+      i=j;
+    } else i++;
+  }
+  return up.map((v,idx)=>{
+    if(fer[idx]) return {c:'FÉRIAS',t:'ferias'};
+    if(ehTurno(v)) return {c:v,t:'turno'};
+    if(v==='*')   return {c:'*',t:'domingo'};
+    if(v==='FF')  return {c:'FF',t:'feriado'};
+    if(v==='FA')  return {c:'FA',t:'aniv'};
+    if(v==='F')   return {c:'F',t:'folga'};
+    if(v==='')    return {c:'',t:'vazio'};
+    return {c:v,t:'outro'};
+  });
+}
+
+// acha a linha dos números dos dias (a que tem mais inteiros 1..31 em sequência)
+function acharLinhaDias(rows){
+  let melhor=-1, melhorScore=0, melhorCols=null;
+  for(let r=0;r<Math.min(rows.length,8);r++){
+    const cols=[];
+    (rows[r]||[]).forEach((v,c)=>{
+      const n=parseInt(String(v).trim(),10);
+      if(String(v).trim()!=='' && n>=1 && n<=31 && String(parseInt(String(v).trim(),10))===String(v).trim()) cols.push({col:c,n});
+    });
+    if(cols.length>melhorScore){ melhorScore=cols.length; melhor=r; melhorCols=cols; }
+  }
+  return melhorScore>=10 ? {row:melhor,cols:melhorCols} : null;
+}
+
+function parseEscalaMensal(rows,nomeArq){
+  const diaInfo=acharLinhaDias(rows);
+  if(!diaInfo) throw new Error('Não encontrei a linha com os dias do mês (1, 2, 3…). Confira se escolheu a aba certa.');
+  const dayCols=diaInfo.cols;                 // [{col,n}]
+  const colIdxs=dayCols.map(d=>d.col);
+  const nomeCol=Math.max(0,Math.min.apply(null,colIdxs)-1); // coluna do nome = imediatamente antes dos dias
+  const funcCol=Math.max(0,nomeCol-1);
+
+  // título / mês
+  let titulo='', mesNum=null;
+  for(let r=0;r<=diaInfo.row;r++){
+    const linha=(rows[r]||[]).map(x=>String(x).trim()).join(' ');
+    const mnorm=norm(linha);
+    if(mnorm.indexOf('escala')>=0 || MESES_PT.some(m=>mnorm.indexOf(m)>=0)){
+      MESES_PT.forEach((m,idx)=>{ if(mnorm.indexOf(m)>=0 && mesNum===null) mesNum=idx; });
+      if(!titulo) titulo=linha.replace(/\s+/g,' ').trim();
+    }
+  }
+  // linha dos dias da semana (logo abaixo dos números), se houver
+  const dowRow=rows[diaInfo.row+1]||[];
+  const dias=dayCols.map(d=>{
+    let dw=String(dowRow[d.col]||'').trim().toUpperCase();
+    return {n:d.n, dow:dw};
+  });
+
+  // funcionários
+  const funcs=[]; let funcAtual='';
+  for(let r=diaInfo.row+2;r<rows.length;r++){
+    const row=rows[r]||[];
+    const fcell=String(row[funcCol]||'').trim();
+    const nome=String(row[nomeCol]||'').trim();
+    if(fcell) funcAtual=fcell;
+    if(!nome) continue;
+    if(nome.indexOf('=')>=0) break;                       // início da legenda (F = FOLGA…)
+    if(/^H\d{1,2}\b/.test(nome.toUpperCase())) break;     // legenda de horários
+    if(!/[A-Za-zÀ-ÿ]{3,}/.test(nome)) continue;           // descarta números soltos
+    const raw=dayCols.map(d=>row[d.col]);
+    const preenchidas=raw.filter(v=>String(v==null?'':v).trim()!=='').length;
+    if(preenchidas<5) continue;
+    funcs.push({func:funcAtual===nome?'':funcAtual, nome, dias:classificarDias(raw)});
+  }
+  if(!funcs.length) throw new Error('Não encontrei funcionários com escala nesta aba.');
+  return {titulo:titulo||nomeArq, mesNum, dias, funcs, fonte:nomeArq};
+}
+
+// soma por turno de um funcionário
+function tallyFunc(f){
+  const t={}; let folga=0,domingo=0,ferias=0,feriado=0,aniv=0,outro=0,trab=0;
+  f.dias.forEach(d=>{
+    if(d.t==='turno'){ t[d.c]=(t[d.c]||0)+1; trab++; }
+    else if(d.t==='folga')folga++;
+    else if(d.t==='domingo'){domingo++;trab++;}
+    else if(d.t==='ferias')ferias++;
+    else if(d.t==='feriado')feriado++;
+    else if(d.t==='aniv')aniv++;
+    else if(d.t==='outro')outro++;
+  });
+  return {turnos:t,folga,domingo,ferias,feriado,aniv,outro,trab};
+}
+// união ordenada dos códigos de turno de um mês
+function turnosDoMes(mes){
+  const s=new Set();
+  mes.funcs.forEach(f=>f.dias.forEach(d=>{ if(d.t==='turno')s.add(d.c); }));
+  return Array.from(s).sort();
+}
+
+/* ---------- importação: escolher aba → confirmar → salvar ---------- */
+async function importarEscalaMensal(file){
+  const prog=modalProgresso('Lendo '+file.name);
+  let wbAll;
+  try{ wbAll=await readWorkbookAll(file); }
+  catch(e){ closeModal(); toast('Não consegui abrir o Excel','err'); return; }
+  closeModal();
+  // qual aba? tenta achar a que parece escala do mês; senão deixa escolher
+  const candidatas=wbAll.names.filter(n=>{
+    try{ const p=parseEscalaMensal(wbAll.sheets[n],file.name); return p.funcs.length>0; }catch(e){ return false; }
+  });
+  const escolher=(nome)=>{
+    let p; try{ p=parseEscalaMensal(wbAll.sheets[nome],file.name); }
+    catch(e){ toast(e.message,'err'); return; }
+    confirmarEscalaMensal(p,file.name);
+  };
+  if(candidatas.length===1){ escolher(candidatas[0]); return; }
+  const lista=(candidatas.length?candidatas:wbAll.names);
+  const preferida=candidatas.find(n=>{ const mn=norm(n); return MESES_PT.some((m,i)=>mn.indexOf(m.slice(0,3))>=0); })||lista[0];
+  openModal('Escolher a aba do mês','ti-table',
+    '<p class="hint" style="margin-top:0">O arquivo tem várias abas. Escolha a do mês que você quer importar.</p>'
+    +'<div class="f-wrap"><label class="f" for="abaSel">Aba</label><select id="abaSel">'
+    +lista.map(n=>'<option'+(n===preferida?' selected':'')+'>'+esc(n)+'</option>').join('')+'</select></div>'
+    +(candidatas.length?'<p class="hint" style="margin:10px 0 0">Abas que parecem escala já vêm filtradas.</p>':''),
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-primary btn-sm" id="abaOk" type="button"><i class="ti ti-arrow-right" aria-hidden="true"></i> Ler aba</button>');
+  $('#abaOk').onclick=()=>{ const n=$('#abaSel').value; closeModal(); escolher(n); };
+}
+
+function confirmarEscalaMensal(p,arq){
+  const anoAtual=+todayStr().slice(0,4);
+  const totDias=p.funcs.length?p.funcs[0].dias.length:0;
+  let body='<p class="hint" style="margin-top:0">Li <b>'+p.funcs.length+'</b> funcionário(s) e <b>'+totDias+'</b> dia(s) em <b>'+esc(arq)+'</b>. Confira o mês antes de salvar.</p>'
+    +'<div class="two"><div class="f-wrap"><label class="f" for="menMes">Mês</label><select id="menMes">'
+    +MESES_PT.map((m,i)=>'<option value="'+i+'"'+(i===p.mesNum?' selected':'')+'>'+m.charAt(0).toUpperCase()+m.slice(1)+'</option>').join('')+'</select></div>'
+    +'<div class="f-wrap"><label class="f" for="menAno">Ano</label><input id="menAno" type="number" value="'+anoAtual+'" min="2020" max="2100"></div></div>'
+    +'<div class="tbl-wrap" style="margin-top:14px;max-height:34vh;overflow:auto"><table class="mini-tbl"><thead><tr><th>Função</th><th>Nome</th><th>Dias lidos</th></tr></thead><tbody>'
+    +p.funcs.map(f=>'<tr><td>'+esc(f.func||'—')+'</td><td>'+esc(f.nome)+'</td><td class="num">'+f.dias.filter(d=>d.t!=='vazio').length+'</td></tr>').join('')
+    +'</tbody></table></div>';
+  openModal('Confirmar importação','ti-calendar-check',body,
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Cancelar</button>'
+    +'<button class="btn btn-primary btn-sm" id="menOk" type="button"><i class="ti ti-check" aria-hidden="true"></i> Importar</button>');
+  $('#menOk').onclick=()=>{
+    const mesNum=+$('#menMes').value, ano=+$('#menAno').value||anoAtual;
+    const nome=MESES_PT[mesNum].charAt(0).toUpperCase()+MESES_PT[mesNum].slice(1)+'/'+ano;
+    // substitui mesmo mês/ano já importado
+    MENSAL=MENSAL.filter(m=>!(m.mesNum===mesNum&&m.ano===ano));
+    const id=uid();
+    MENSAL.push({id,nome,mesNum,ano,fonte:arq,titulo:p.titulo,dias:p.dias,funcs:p.funcs,criadoEm:todayStr()});
+    mesSelId=id; buscaMen='';
+    saveAll(); closeModal(); selectTab('mensal'); toast('Escala de '+nome+' importada','ok');
+  };
+}
+
+/* ---------- render ---------- */
+function renderMensal(){
+  const el=$('#tab-mensal');
+  let html='<div class="card"><h2><i class="ti ti-calendar-month" aria-hidden="true"></i> Importar escala do mês (Excel)</h2>'
+    +'<p class="hint">Anexe a sua planilha do jeito que ela já é: uma linha por funcionário, os dias do mês nas colunas e o turno (H01–H09), F, * ou férias em cada dia. O app lê tudo aqui no navegador e monta a escala + a contagem de turnos.</p>'
+    +'<div class="drop" id="menDrop" role="button" tabindex="0" aria-label="Escolher planilha de escala">'
+    +'<i class="ti ti-file-spreadsheet" aria-hidden="true"></i><p>Arraste a planilha aqui ou clique para escolher</p>'
+    +'<small>.xlsx, .xlsb, .xls ou .csv</small>'
+    +'<input type="file" id="menFile" accept=".xlsx,.xlsb,.xls,.csv" style="display:none"></div>'
+    +'<p class="hint" style="margin:14px 0 0"><b>Como é lido:</b> H01–H09 = turno trabalhado · F = folga · * = domingo escalado · células de férias (que soletram F-É-R-I-A-S) = férias · FF = folga feriado · FA = folga aniversário. A cor não é necessária — o app reconhece pelo conteúdo.</p>'
+    +'</div>';
+
+  if(!MENSAL.length){
+    html+='<div class="card"><div class="empty"><i class="ti ti-calendar-off" aria-hidden="true"></i>Nenhuma escala importada ainda.<br>Anexe a planilha do mês para ver a grade e a contagem de turnos.</div></div>';
+    el.innerHTML=html; ligarDropMensal(); return;
+  }
+
+  if(!mesSelId||!MENSAL.some(m=>m.id===mesSelId)) mesSelId=MENSAL[MENSAL.length-1].id;
+  const mes=MENSAL.find(m=>m.id===mesSelId);
+
+  // seletor de mês + ações
+  html+='<div class="card"><div class="daybar" style="justify-content:space-between">'
+    +'<div class="f-wrap" style="max-width:230px;margin:0"><label class="f" for="menSel">Mês importado</label><select id="menSel">'
+    +MENSAL.slice().sort((a,b)=>(b.ano-a.ano)||(b.mesNum-a.mesNum)).map(m=>'<option value="'+m.id+'"'+(m.id===mesSelId?' selected':'')+'>'+esc(m.nome)+'</option>').join('')
+    +'</select></div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">'
+    +'<button class="btn btn-ghost btn-sm" id="menCSV" type="button"><i class="ti ti-download" aria-hidden="true"></i> Baixar contagem (CSV)</button>'
+    +'<button class="btn btn-danger btn-sm" id="menDel" type="button"><i class="ti ti-trash" aria-hidden="true"></i> Excluir mês</button></div></div>';
+
+  const turnos=turnosDoMes(mes);
+  const tallies=mes.funcs.map(f=>({f,t:tallyFunc(f)}));
+  const totFer=tallies.filter(x=>x.t.ferias>0).length;
+  html+='<div class="stats">'
+    +'<div class="stat"><div class="v">'+mes.funcs.length+'</div><div class="k"><i class="ti ti-users" aria-hidden="true"></i> Funcionários</div></div>'
+    +'<div class="stat"><div class="v">'+mes.dias.length+'</div><div class="k"><i class="ti ti-calendar" aria-hidden="true"></i> Dias</div></div>'
+    +'<div class="stat"><div class="v">'+turnos.length+'</div><div class="k"><i class="ti ti-clock-hour-3" aria-hidden="true"></i> Turnos usados</div></div>'
+    +'<div class="stat"><div class="v">'+totFer+'</div><div class="k"><i class="ti ti-umbrella" aria-hidden="true"></i> De férias</div></div>'
+    +'</div></div>';
+
+  // ---- CONTAGEM DE TURNOS (o pedido principal)
+  html+='<div class="card"><h2><i class="ti ti-list-numbers" aria-hidden="true"></i> Contagem de turnos por funcionário</h2>'
+    +'<p class="hint">Quantas vezes cada pessoa fez cada turno no mês, além de folgas, domingos escalados e férias.</p>'
+    +'<div class="search-wrap"><i class="ti ti-search" aria-hidden="true"></i>'
+    +'<input type="text" style="position:absolute;opacity:0;pointer-events:none;height:0" tabindex="-1" aria-hidden="true" autocomplete="username">'
+    +'<label class="sr-only" for="menBusca">Buscar funcionário</label>'
+    +'<input id="menBusca" type="search" autocomplete="off" placeholder="Buscar funcionário…" value="'+esc(buscaMen)+'"></div>';
+
+  const q=norm(buscaMen);
+  const vis=tallies.filter(x=>!q||norm(x.f.nome).includes(q)||norm(x.f.func||'').includes(q));
+  html+='<div class="tbl-wrap"><table class="grid-tally"><thead><tr><th class="stik">Funcionário</th>'
+    +turnos.map(t=>'<th class="num" title="'+(HTIMES[t]?esc(HTIMES[t]):'')+'">'+esc(t)+'</th>').join('')
+    +'<th class="num">Folgas</th><th class="num">Dom*</th><th class="num">Férias</th>'
+    +(tallies.some(x=>x.t.feriado)?'<th class="num">FF</th>':'')
+    +(tallies.some(x=>x.t.aniv)?'<th class="num">FA</th>':'')
+    +'<th class="num">Trab.</th></tr></thead><tbody>';
+  if(!vis.length){
+    const span=turnos.length+5;
+    html+='<tr><td colspan="'+span+'" style="text-align:center;color:var(--muted);padding:18px">Ninguém encontrado.</td></tr>';
+  }else{
+    vis.forEach(x=>{
+      html+='<tr><td class="stik"><b>'+esc(x.f.nome)+'</b>'+(x.f.func?'<br><span class="muted" style="font-size:11px">'+esc(x.f.func)+'</span>':'')+'</td>'
+        +turnos.map(t=>'<td class="num">'+(x.t.turnos[t]?'<b>'+x.t.turnos[t]+'</b>':'<span class="muted">·</span>')+'</td>').join('')
+        +'<td class="num">'+(x.t.folga||'<span class="muted">·</span>')+'</td>'
+        +'<td class="num">'+(x.t.domingo||'<span class="muted">·</span>')+'</td>'
+        +'<td class="num">'+(x.t.ferias||'<span class="muted">·</span>')+'</td>'
+        +(tallies.some(y=>y.t.feriado)?'<td class="num">'+(x.t.feriado||'<span class="muted">·</span>')+'</td>':'')
+        +(tallies.some(y=>y.t.aniv)?'<td class="num">'+(x.t.aniv||'<span class="muted">·</span>')+'</td>':'')
+        +'<td class="num"><b>'+x.t.trab+'</b></td></tr>';
+    });
+  }
+  html+='</tbody></table></div>'
+    +'<p class="hint" style="margin:10px 0 0">Turnos: '+turnos.map(t=>t+(HTIMES[t]?' ('+HTIMES[t]+')':'')).join(' · ')+'. “Dom*” = domingos escalados (marcados com *). “Trab.” = total de dias trabalhados.</p></div>';
+
+  // ---- GRADE do mês
+  html+='<div class="card"><h2><i class="ti ti-table" aria-hidden="true"></i> Grade de '+esc(mes.nome)+'</h2>'
+    +'<p class="hint">A escala como na sua planilha. Role para o lado para ver o mês inteiro.</p>'
+    +'<div class="tbl-wrap"><table class="grid-escala"><thead><tr><th class="stik">Funcionário</th>'
+    +mes.dias.map(d=>'<th class="num'+(d.dow==='D'?' dom':'')+'">'+d.n+'<span>'+esc(d.dow||'')+'</span></th>').join('')
+    +'</tr></thead><tbody>';
+  vis.forEach(x=>{
+    html+='<tr><td class="stik"><b>'+esc(x.f.nome)+'</b>'+(x.f.func?'<br><span class="muted" style="font-size:11px">'+esc(x.f.func)+'</span>':'')+'</td>'
+      +x.f.dias.map(d=>'<td class="cel '+d.t+'">'+(d.t==='vazio'?'':esc(d.c==='FÉRIAS'?'FÉR':d.c))+'</td>').join('')+'</tr>';
+  });
+  html+='</tbody></table></div>'
+    +'<div class="chips" style="margin-top:12px;font-size:12px">'
+    +'<span class="cel-leg turno">H0x turno</span><span class="cel-leg folga">F folga</span>'
+    +'<span class="cel-leg domingo">* domingo</span><span class="cel-leg ferias">férias</span>'
+    +'<span class="cel-leg feriado">FF feriado</span><span class="cel-leg aniv">FA aniversário</span></div></div>';
+
+  el.innerHTML=html;
+
+  // ligações
+  ligarDropMensal();
+  $('#menSel').onchange=e=>{ mesSelId=e.target.value; buscaMen=''; renderMensal(); };
+  $('#menDel').onclick=()=>{
+    if(!confirm('Excluir a escala de '+mes.nome+'? Isso não afeta a sua planilha original.'))return;
+    MENSAL=MENSAL.filter(m=>m.id!==mes.id); mesSelId=null; saveAll(); renderMensal(); toast('Escala removida');
+  };
+  $('#menCSV').onclick=()=>baixarContagemCSV(mes);
+  const bs=$('#menBusca');
+  if(bs){
+    bs.oninput=e=>{
+      let v=e.target.value; if(v.includes('@')){ v=''; e.target.value=''; }
+      buscaMen=v; const pos=e.target.selectionStart; renderMensal();
+      const n=$('#menBusca'); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(err){} }
+    };
+    bs.onfocus=e=>{ if(e.target.value.includes('@')){ e.target.value=''; buscaMen=''; } };
+  }
+}
+
+function ligarDropMensal(){
+  const drop=$('#menDrop'), file=$('#menFile');
+  if(!drop)return;
+  drop.onclick=()=>file.click();
+  drop.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); file.click(); } };
+  file.onchange=e=>{ if(e.target.files[0])importarEscalaMensal(e.target.files[0]); file.value=''; };
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f)importarEscalaMensal(f); });
+}
+
+function baixarContagemCSV(mes){
+  const turnos=turnosDoMes(mes);
+  const head=['Funcao','Nome',...turnos,'Folgas','Domingos','Ferias','FolgaFeriado','FolgaAniversario','DiasTrabalhados'];
+  const linhas=[head.join(';')];
+  mes.funcs.forEach(f=>{
+    const t=tallyFunc(f);
+    linhas.push([f.func||'', f.nome, ...turnos.map(x=>t.turnos[x]||0), t.folga,t.domingo,t.ferias,t.feriado,t.aniv,t.trab]
+      .map(v=>{ const s=String(v); return /[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(';'));
+  });
+  const blob=new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='contagem-turnos-'+norm(mes.nome).replace(/\W+/g,'-')+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+  toast('CSV baixado','ok');
+}
+
+/* ============================================================
    ABA: RECEBIMENTO DE MERCADORIA
    Lê PDF (camada de texto), XML de NF-e, texto/CSV e imagem (OCR),
    extrai a lista de produtos e mostra para conferência ANTES de
@@ -1863,15 +2227,15 @@ function renderConfig(){
   };
 
   $('#bkExport').onclick=()=>{
-    const data={v:2,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG};
+    const data={v:3,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG,mensal:MENSAL};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='farmaciagest-backup.json'; a.click(); URL.revokeObjectURL(a.href);
   };
   $('#bkImport').onclick=()=>$('#bkFile').click();
   $('#bkFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result);
-    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg;
+    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg; if(d.mensal)MENSAL=d.mensal;
     ensureMinimos(); saveAll(); render(); toast('Dados importados','ok'); }catch(err){ toast('Arquivo inválido','err'); } }; r.readAsText(f); e.target.value=''; };
-  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[]; saveAll(); render(); toast('Dados apagados'); } };
+  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[];MENSAL=[]; saveAll(); render(); toast('Dados apagados'); } };
 }
 
 /* ================= start ================= */
