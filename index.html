@@ -1569,8 +1569,12 @@ function confirmarEscalaMensal(p,arq){
     MENSAL=MENSAL.filter(m=>!(m.mesNum===mesNum&&m.ano===ano));
     const id=uid();
     MENSAL.push({id,nome,mesNum,ano,fonte:arq,titulo:p.titulo,dias:p.dias,funcs:p.funcs,criadoEm:todayStr()});
+    // a grade pode usar turnos ainda não cadastrados (ex.: H04, H09) — sem eles,
+    // quem for escalado nesse turno não apareceria na Escala do dia
+    const novos=ensureTurnosDasEscalas();
     mesSelId=id; buscaMen='';
-    saveAll(); closeModal(); selectTab('mensal'); toast('Escala de '+nome+' importada','ok');
+    saveAll(); closeModal(); selectTab('mensal');
+    toast('Escala de '+nome+' importada'+(novos?' · '+novos+' turno(s) criado(s)':''),'ok');
   };
 }
 
@@ -1682,6 +1686,22 @@ function cadastrarFuncsDoMes(mes){
     closeModal(); selectTab('func');
     toast(criados+' cadastrado(s)'+(atualizados?' · '+atualizados+' atualizado(s)':''),'ok');
   };
+}
+
+// garante que todo turno usado pelas escalas importadas exista no cadastro
+function ensureTurnosDasEscalas(){
+  let novos=0;
+  MENSAL.forEach(mes=>{
+    turnosDoMes(mes).forEach(cod=>{
+      if(TURNOS.some(t=>norm(t.nome)===norm(cod)||t.id===cod))return;
+      const h=HRANGE[cod]||['00:00','00:00'];
+      TURNOS.push({id:cod,nome:cod,ini:h[0],fim:h[1]});
+      MINIMOS[cod]={}; CATS.forEach(c=>{ MINIMOS[cod][c.id]=0; });
+      novos++;
+    });
+  });
+  if(novos)saveAll();
+  return novos;
 }
 
 /* ---------- render ---------- */
@@ -2457,6 +2477,7 @@ function renderConfig(){
 }
 
 /* ================= start ================= */
+ensureTurnosDasEscalas();
 render();
 </script>
 </body>
