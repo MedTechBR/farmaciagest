@@ -179,6 +179,15 @@ tr:last-child td{border-bottom:none}
 .search-wrap .ti-search{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:18px;pointer-events:none}
 .search-wrap input{padding-left:38px}
 
+/* horários oficiais dos turnos (informados pelo usuário e conferidos com a
+   legenda da planilha); usados quando o código do turno ainda não está cadastrado */
+const HRANGE={
+  H01:['06:50','14:40'], H02:['08:10','16:00'], H03:['10:10','18:00'], H04:['12:10','20:00'],
+  H05:['13:10','21:00'], H06:['14:30','22:20'], H07:['15:30','23:20'],
+  H08:['09:00','19:00'], H09:['09:30','19:20']
+};
+let bancoTipo='add';   // 'add' lança hora extra, 'sub' desconta
+
 /* ================= escala do dia ================= */
 .shift{border:1px solid var(--line);border-radius:var(--r3);margin-bottom:var(--s3);overflow:hidden}
 .shift .head{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:11px 14px;background:var(--brand-soft);border-bottom:1px solid var(--brand-line)}
@@ -237,6 +246,16 @@ tr:last-child td{border-bottom:none}
 .kv:last-child{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
+
+/* marcador de troca na escala do dia */
+.troca-mark{background:var(--warn-soft);color:var(--warn);border:1px solid #fde68a;border-radius:var(--r1);
+  font-weight:900;font-size:15px;line-height:1;margin-left:6px;cursor:pointer;font-family:inherit;
+  min-width:28px;height:28px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;
+  vertical-align:middle;transition:background .15s,transform .1s}
+.troca-mark:hover{background:#fde68a}
+.troca-mark:active{transform:scale(.94)}
+:root[data-theme="dark"] .troca-mark{background:#3a2a10;color:#fbbf24;border-color:#78500f}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .troca-mark{background:#3a2a10;color:#fbbf24;border-color:#78500f}}
 
 /* ================= escala mensal ================= */
 table.grid-tally, table.grid-escala{border-collapse:separate;border-spacing:0;font-size:13px;min-width:max-content}
@@ -445,8 +464,53 @@ function saldoFunc(fid){
 function fmtH(n){ const v=Math.round((+n||0)*100)/100; return (v>0?'+':'')+v+'h'; }
 
 /* ================= escala do dia ================= */
+/* A escala mensal importada é a FONTE DA VERDADE: o horário de cada pessoa
+   muda conforme o dia, então o turno do dia vem da grade do mês. O turno do
+   cadastro só serve de reserva para datas sem escala importada. */
+function mesDaData(dateStr){
+  const d=parseDate(dateStr); if(!d)return null;
+  return MENSAL.find(m=>m.mesNum===d.getMonth()&&m.ano===d.getFullYear())||null;
+}
+function linhaMensal(mes,f){
+  if(!mes)return null;
+  const alvo=norm(f.nome);
+  return mes.funcs.find(x=>norm(x.nome)===alvo)
+      || mes.funcs.find(x=>norm(x.nome).startsWith(alvo)||alvo.startsWith(norm(x.nome)))
+      || null;
+}
+// horário de um código H0x: usa o turno cadastrado; se não existir, a tabela oficial
+function horarioDoCodigo(cod){
+  const t=TURNOS.find(t=>norm(t.nome)===norm(cod)||t.id===cod);
+  if(t)return {turnoId:t.id,entrada:t.ini,saida:t.fim};
+  const h=(typeof HRANGE!=='undefined'&&HRANGE[cod])||null;
+  return {turnoId:cod,entrada:h?h[0]:'',saida:h?h[1]:''};
+}
+// o que a escala mensal diz para esta pessoa neste dia (null = mês não importado)
+function escalaMensalDoDia(f,dateStr){
+  const mes=mesDaData(dateStr); if(!mes)return null;
+  const linha=linhaMensal(mes,f); if(!linha)return null;
+  const d=parseDate(dateStr); const idx=d.getDate()-1;
+  const cel=linha.dias[idx]; if(!cel)return null;
+  const base={fonte:'mensal'};
+  if(cel.t==='turno')  return Object.assign(base,{status:'trabalha'},horarioDoCodigo(cel.c),{cod:cel.c});
+  if(cel.t==='domingo')return Object.assign(base,{status:'trabalha',motivo:'Domingo escalado'},horarioDoCodigo(''),{cod:'*',semHorario:true});
+  if(cel.t==='folga')  return Object.assign(base,{status:'folga',motivo:'Folga'});
+  if(cel.t==='ferias') return Object.assign(base,{status:'folga',motivo:'Férias'});
+  if(cel.t==='feriado')return Object.assign(base,{status:'folga',motivo:'Folga de feriado'});
+  if(cel.t==='aniv')   return Object.assign(base,{status:'folga',motivo:'Folga de aniversário'});
+  return null; // dia em branco na planilha: cai no cadastro
+}
 // retorna {status:'trabalha'|'folga', turnoId, entrada, saida, motivo, trocaCom, trocaObs}
 function baseSchedule(f,dateStr){
+  const men=escalaMensalDoDia(f,dateStr);
+  if(men){
+    if(men.semHorario){ // '*' sem código de turno: mantém o horário habitual da pessoa
+      const t=turnoOf(f.turnoId);
+      return {status:'trabalha',motivo:men.motivo,fonte:'mensal',cod:'*',
+              turnoId:f.turnoId,entrada:f.entrada||(t?t.ini:''),saida:f.saida||(t?t.fim:'')};
+    }
+    return men;
+  }
   const wd=weekdayOf(dateStr);
   const isHol=FERIAS.some(h=>h.data===dateStr);
   const folgas=f.folgas||[];
@@ -461,8 +525,10 @@ function daySchedule(dateStr){
   TROCAS.filter(t=>(t.datas||[]).includes(dateStr)).forEach(t=>{
     const a=map[t.aId], b=map[t.bId];
     if(!a||!b)return;
-    const na={status:b.status,turnoId:b.turnoId,entrada:b.entrada,saida:b.saida,motivo:b.motivo,trocaCom:t.bId,trocaObs:t.obs};
-    const nb={status:a.status,turnoId:a.turnoId,entrada:a.entrada,saida:a.saida,motivo:a.motivo,trocaCom:t.aId,trocaObs:t.obs};
+    const na={status:b.status,turnoId:b.turnoId,entrada:b.entrada,saida:b.saida,motivo:b.motivo,cod:b.cod,fonte:a.fonte,
+              trocaCom:t.bId,trocaObs:t.obs,trocaId:t.id,eraTurno:a.turnoId,eraCod:a.cod,eraStatus:a.status,eraEntrada:a.entrada,eraSaida:a.saida};
+    const nb={status:a.status,turnoId:a.turnoId,entrada:a.entrada,saida:a.saida,motivo:a.motivo,cod:a.cod,fonte:b.fonte,
+              trocaCom:t.aId,trocaObs:t.obs,trocaId:t.id,eraTurno:b.turnoId,eraCod:b.cod,eraStatus:b.status,eraEntrada:b.entrada,eraSaida:b.saida};
     map[t.aId]=na; map[t.bId]=nb;
   });
   return map;
@@ -710,6 +776,10 @@ function renderFunc(){
   html+='<div class="card">'
     +'<h2><i class="ti ti-users"></i> Funcionários <span class="tag gray">'+FUNCS.length+'</span></h2>'
     +'<p class="hint">Clique em um nome para ver folga da semana, hora extra, folga de feriado e o saldo do banco de horas.</p>'
+    +(MENSAL.length?('<div class="alert info" style="margin-bottom:14px"><i class="ti ti-calendar-check" aria-hidden="true"></i><div>'
+       +'O turno mostrado aqui é só o <b>habitual</b> de cada pessoa. Nos meses importados ('
+       +MENSAL.slice().sort((a,b)=>(a.ano-b.ano)||(a.mesNum-b.mesNum)).map(m=>esc(m.nome)).join(', ')
+       +'), quem manda no dia a dia é a <b>escala mensal</b> — a aba Escala mostra o turno real de cada dia.</div></div>'):'')
     +'<div class="row-actions" style="margin-top:0;margin-bottom:14px"><button class="btn btn-primary btn-sm" id="btnNovo"><i class="ti ti-user-plus"></i> Novo funcionário</button></div>';
   if(FUNCS.length>=6){
     // honeypot + filtro de "@": o Chrome insiste em autopreencher e-mail em campo de busca
@@ -1046,6 +1116,7 @@ function renderDia(){
       +(isHol?' <span class="tag troca"><i class="ti ti-confetti" aria-hidden="true"></i> Feriado: '+esc(isHol.nome)+'</span>':'')+'</div>'
       +resumoDia(diaSel)+'</div>';
     el.innerHTML=html+cardsDoDia(diaSel);
+    $$('.troca-mark',el).forEach(b=>b.onclick=e=>{ e.stopPropagation(); detalheTroca(b.dataset.f,b.dataset.d); });
   }
 
   $('#vDia').onclick=()=>{ vistaDia='dia'; renderDia(); };
@@ -1056,6 +1127,29 @@ function renderDia(){
   $('#diaPrev').onclick=()=>{ diaSel=shiftDay(diaSel,-passo); renderDia(); };
   $('#diaNext').onclick=()=>{ diaSel=shiftDay(diaSel,passo); renderDia(); };
   $('#diaPrint').onclick=()=>window.print();
+}
+
+/* ---------- detalhe da troca (o '*' na escala do dia) ---------- */
+function detalheTroca(funcId,dia){
+  const f=funcById(funcId); if(!f)return;
+  const s=daySchedule(dia)[funcId]; if(!s||!s.trocaCom)return;
+  const o=funcById(s.trocaCom);
+  const tr=TROCAS.find(t=>t.id===s.trocaId)||null;
+  const desc=x=>x.status==='folga'?('Folga'+(x.motivo?' ('+x.motivo+')':'')):((x.cod?x.cod+' · ':'')+(x.entrada||'—')+' – '+(x.saida||'—'));
+  const antes=desc({status:s.eraStatus,cod:s.eraCod,entrada:s.eraEntrada,saida:s.eraSaida,motivo:s.motivo});
+  const agora=desc(s);
+  let b='<div class="alert info"><i class="ti ti-arrows-exchange" aria-hidden="true"></i><div>'
+    +'<b>'+esc(f.nome)+'</b> trocou com <b>'+esc(o?o.nome:'?')+'</b> em '+esc(fmtDateLong(dia))+'.</div></div>'
+    +'<div class="kv"><span class="k">Escala original</span><span class="v">'+esc(antes)+'</span></div>'
+    +'<div class="kv"><span class="k">Passou a fazer</span><span class="v">'+esc(agora)+'</span></div>'
+    +'<div class="kv"><span class="k">Trocou com</span><span class="v">'+esc(o?o.nome:'?')+'</span></div>';
+  if(tr&&(tr.datas||[]).length>1)
+    b+='<div class="kv"><span class="k">Dias desta troca</span><span class="v">'+tr.datas.slice().sort().map(fmtDateBR).join(' · ')+'</span></div>';
+  if(s.trocaObs)b+='<div class="kv"><span class="k">Observação</span><span class="v">'+esc(s.trocaObs)+'</span></div>';
+  openModal('Troca do dia','ti-arrows-exchange',b,
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Fechar</button>'
+    +'<button class="btn btn-ghost btn-sm" type="button" id="trIr"><i class="ti ti-external-link" aria-hidden="true"></i> Ver em Trocas</button>');
+  $('#trIr').onclick=()=>{ closeModal(); selectTab('trocas'); };
 }
 
 /* ---------- resumo do dia: quatro números que respondem "como está hoje?" ---------- */
@@ -1149,8 +1243,10 @@ function cardsDoDia(dia){
       const s=map[f.id];
       let badges='<span class="tag '+catClass(f.catId)+'">'+esc(catName(f.catId))+'</span>';
       if(f.horaExtra)badges+=' <span class="tag extra"><i class="ti ti-clock-plus" aria-hidden="true"></i> H.extra</span>';
-      if(s.trocaCom){ const o=funcById(s.trocaCom); badges+=' <span class="tag troca"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Troca c/ '+esc(o?o.nome.split(' ')[0]:'?')+'</span>'; }
-      html+='<div class="line"><span class="nm">'+esc(f.nome)+'</span><span class="hr">'+esc(s.entrada||'—')+' – '+esc(s.saida||'—')+'</span></div><div style="padding:0 0 8px"><div class="chips">'+badges+(s.trocaObs?' <span class="muted" style="font-size:11.5px">'+esc(s.trocaObs)+'</span>':'')+'</div></div>';
+      if(s.cod&&s.fonte==='mensal')badges+=' <span class="tag gray">'+esc(s.cod)+'</span>';
+      // '*' marca a troca no dia; clicar abre o detalhe
+      const marca=s.trocaCom?'<button type="button" class="troca-mark" data-f="'+f.id+'" data-d="'+dia+'" aria-label="Ver detalhes da troca de '+esc(f.nome)+'" title="Trocado neste dia — toque para ver">*</button>':'';
+      html+='<div class="line"><span class="nm">'+esc(f.nome)+marca+'</span><span class="hr">'+esc(s.entrada||'—')+' – '+esc(s.saida||'—')+'</span></div><div style="padding:0 0 8px"><div class="chips">'+badges+'</div></div>';
     });
     html+='</div></div>';
   });
@@ -1231,15 +1327,18 @@ function renderTrocas(){
    ============================================================ */
 function renderBanco(){
   const el=$('#tab-banco');
-  let html='<div class="card"><h2><i class="ti ti-clock-hour-4"></i> Lançar hora extra / compensação</h2>'
-    +'<p class="hint">Registre horas extras feitas por demanda especial (valor positivo, ex.: 2) ou horas compensadas/descontadas (valor negativo, ex.: -1,5). O saldo de cada funcionário é somado automaticamente.</p>';
+  let html='<div class="card"><h2><i class="ti ti-clock-hour-4"></i> Lançar ou descontar horas</h2>'
+    +'<p class="hint">Escolha <b>Adicionar</b> para hora extra e <b>Descontar</b> para hora compensada, falta ou saída antecipada. Informe as horas sempre em número positivo — o app aplica o sinal.</p>'
+    +'<div class="seg" role="group" aria-label="Tipo de lançamento" style="margin-bottom:12px">'
+    +'<button type="button" id="bkAdd" aria-pressed="'+(bancoTipo==='add')+'"><i class="ti ti-plus" aria-hidden="true"></i> Adicionar</button>'
+    +'<button type="button" id="bkSub" aria-pressed="'+(bancoTipo==='sub')+'"><i class="ti ti-minus" aria-hidden="true"></i> Descontar</button></div>';
   if(FUNCS.length===0){ html+='<div class="empty"><i class="ti ti-users"></i>Cadastre funcionários primeiro.</div></div>'; el.innerHTML=html; return; }
   const opts=FUNCS.slice().sort((a,b)=>a.nome.localeCompare(b.nome)).map(f=>'<option value="'+f.id+'">'+esc(f.nome)+'</option>').join('');
   html+='<div class="inline-add"><div class="f-wrap" style="min-width:180px"><label class="f">Funcionário</label><select id="bkFunc">'+opts+'</select></div>'
     +'<div class="f-wrap" style="max-width:150px"><label class="f">Data</label><input type="date" id="bkData" value="'+todayStr()+'"></div>'
-    +'<div class="f-wrap" style="max-width:120px"><label class="f">Horas (+/-)</label><input id="bkHoras" type="number" step="0.25" placeholder="2"></div>'
-    +'<div class="f-wrap" style="min-width:160px"><label class="f">Motivo</label><input id="bkMot" placeholder="ex.: reposição de estoque"></div>'
-    +'<button class="btn btn-primary btn-sm" id="bkSave"><i class="ti ti-plus"></i> Lançar</button></div></div>';
+    +'<div class="f-wrap" style="max-width:130px"><label class="f" for="bkHoras">Horas</label><input id="bkHoras" type="number" step="0.25" min="0" inputmode="decimal" placeholder="2"></div>'
+    +'<div class="f-wrap" style="min-width:160px"><label class="f" for="bkMot">Motivo</label><input id="bkMot" placeholder="'+(bancoTipo==='sub'?'ex.: saiu 1h mais cedo':'ex.: reposição de estoque')+'"></div>'
+    +'<button class="btn '+(bancoTipo==='sub'?'btn-danger':'btn-primary')+' btn-sm" id="bkSave"><i class="ti ti-'+(bancoTipo==='sub'?'minus':'plus')+'" aria-hidden="true"></i> '+(bancoTipo==='sub'?'Descontar':'Lançar')+'</button></div></div>';
 
   // saldos
   html+='<div class="card"><h2><i class="ti ti-scale"></i> Saldos por funcionário</h2><div class="tbl-wrap"><table><thead><tr><th>Funcionário</th><th>Categoria</th><th style="text-align:right">Saldo</th></tr></thead><tbody>';
@@ -1263,12 +1362,17 @@ function renderBanco(){
   html+='</div>';
   el.innerHTML=html;
 
+  $('#bkAdd').onclick=()=>{ bancoTipo='add'; renderBanco(); };
+  $('#bkSub').onclick=()=>{ bancoTipo='sub'; renderBanco(); };
   $('#bkSave').onclick=()=>{
-    const funcId=$('#bkFunc').value; const horas=parseFloat(String($('#bkHoras').value).replace(',','.'));
+    const funcId=$('#bkFunc').value;
+    let horas=parseFloat(String($('#bkHoras').value).replace(',','.'));
     if(!funcId){toast('Escolha o funcionário','err');return;}
-    if(!horas||isNaN(horas)){toast('Informe as horas (ex.: 2 ou -1.5)','err');return;}
+    if(!horas||isNaN(horas)){toast('Informe as horas (ex.: 2 ou 1,5)','err');return;}
+    horas=Math.abs(horas)*(bancoTipo==='sub'?-1:1);   // o sinal vem do botão, não do que foi digitado
     BANCO.push({id:uid(),funcId,data:$('#bkData').value||todayStr(),horas,motivo:$('#bkMot').value.trim()});
-    saveAll();renderBanco();toast('Lançamento registrado','ok');
+    saveAll();renderBanco();
+    toast(bancoTipo==='sub'?('Descontado '+Math.abs(horas)+'h'):('Lançado +'+horas+'h'),'ok');
   };
   $$('.bkDel').forEach(b=>b.onclick=()=>{ if(confirm('Remover este lançamento?')){ BANCO=BANCO.filter(x=>x.id!==b.dataset.id); saveAll();renderBanco(); } });
 }
@@ -1474,11 +1578,6 @@ function confirmarEscalaMensal(p,arq){
    horários oficiais e um funcionário por linha, usando o turno em que
    a pessoa mais trabalhou no mês como turno padrão. Não duplica: quem
    já existe é atualizado. */
-const HRANGE={
-  H01:['06:50','14:40'], H02:['08:10','16:00'], H03:['10:10','18:00'], H04:['12:10','20:00'],
-  H05:['13:10','21:00'], H06:['14:30','22:20'], H07:['15:30','23:20'],
-  H08:['09:00','19:00'], H09:['09:30','19:20']
-};
 function catIdPorNome(nome){
   const alvo=norm(nome);
   let c=CATS.find(c=>norm(c.nome)===alvo);
