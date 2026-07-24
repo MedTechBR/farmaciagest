@@ -1972,37 +1972,57 @@ async function textoDaImagem(file,prog){
 function itensDaPlanilha(rows){
   rows=(rows||[]).filter(r=>r&&r.some(c=>String(c==null?'':c).trim()!==''));
   if(!rows.length)return null;
-  const RE_PROD=/(produto|descri|mercadoria|item|material|medicament)/i;
-  const RE_QTD=/(qtd|quant|volume|caixas|unid)/i;
+  const val=(r,c)=>String((r&&r[c])==null?'':r[c]).trim();
+  // "Item" costuma ser o número da linha, não o produto: pesa menos que "Produto/Descrição"
+  const notaRotulo=t=>{
+    const n=norm(t);
+    if(/(produto|descri|mercadoria|medicament|material)/.test(n))return 10;
+    if(/(nome|especifica)/.test(n))return 6;
+    if(/item/.test(n))return 3;
+    return 0;
+  };
+  const RE_QTD=/(qtd|quant|volume|caixas|unid|pecas|pçs)/i;
   const RE_DIST=/(distribuidor|fornecedor|laborat|emitente|empresa)/i;
   const RE_NF=/(nota|nf\b|nfe|documento)/i;
-  // cabeçalho = primeira linha (das 10 primeiras) que tenha coluna de produto
-  let hIdx=-1,cProd=-1,cQtd=-1,cDist=-1,cNF=-1;
-  for(let i=0;i<Math.min(rows.length,10);i++){
-    const cels=rows[i].map(c=>String(c==null?'':c).trim());
-    const p=cels.findIndex(c=>RE_PROD.test(c));
-    if(p<0)continue;
-    hIdx=i; cProd=p;
-    cQtd=cels.findIndex(c=>RE_QTD.test(c));
-    cDist=cels.findIndex(c=>RE_DIST.test(c));
-    cNF=cels.findIndex(c=>RE_NF.test(c));
-    break;
+
+  let melhor=null;
+  for(let i=0;i<Math.min(rows.length,12);i++){
+    const cels=(rows[i]||[]).map(c=>String(c==null?'':c).trim());
+    const corpo=rows.slice(i+1);
+    if(corpo.length<1)continue;
+    cels.forEach((rot,c)=>{
+      const base=notaRotulo(rot);
+      if(!base)return;
+      // a coluna de produto tem que ter TEXTO de verdade abaixo (não números da coluna "Item")
+      let comTexto=0,total=0;
+      corpo.forEach(r=>{ const v=val(r,c); if(!v)return; total++; if(/[A-Za-zÀ-ÿ]{3,}/.test(v))comTexto++; });
+      if(!total)return;
+      const prop=comTexto/total;
+      if(prop<0.5)return;
+      const score=base*10+prop*10+Math.min(total,20)*0.1;
+      if(!melhor||score>melhor.score)melhor={score,hIdx:i,cProd:c,cels};
+    });
+    if(melhor&&melhor.hIdx===i&&melhor.score>=100)break;   // achou coluna de produto explícita
   }
+
   const itens=[];
-  if(hIdx>=0){
+  if(melhor){
+    const {hIdx,cProd,cels}=melhor;
+    const cQtd=cels.findIndex(c=>RE_QTD.test(c));
+    const cDist=cels.findIndex(c=>RE_DIST.test(c));
+    const cNF=cels.findIndex(c=>RE_NF.test(c));
     for(let i=hIdx+1;i<rows.length;i++){
       const r=rows[i];
-      const nome=String(r[cProd]==null?'':r[cProd]).trim();
+      const nome=val(r,cProd);
       if(!nome||!/[A-Za-zÀ-ÿ]{3,}/.test(nome))continue;
       if(LINHA_LIXO.test(nome))continue;
-      const q=cQtd>=0?parseInt(String(r[cQtd]).replace(/[^\d]/g,''),10):NaN;
-      itens.push({nome,qtd:Math.max(1,isNaN(q)?1:q),
-        dist:cDist>=0?String(r[cDist]==null?'':r[cDist]).trim():'',usar:true});
+      const q=cQtd>=0?parseInt(val(r,cQtd).replace(/[^\d]/g,''),10):NaN;
+      itens.push({nome,qtd:Math.max(1,isNaN(q)?1:q),dist:cDist>=0?val(r,cDist):'',usar:true});
     }
     if(itens.length){
-      const dist=cDist>=0?(itens.find(i=>i.dist)||{}).dist||'':'';
+      const dist=(itens.find(i=>i.dist)||{}).dist||'';
       let nf='';
-      if(cNF>=0)for(let i=hIdx+1;i<rows.length;i++){ const v=String(rows[i][cNF]==null?'':rows[i][cNF]).replace(/\D/g,''); if(v){nf=v;break;} }
+      if(cNF>=0)for(let i=hIdx+1;i<rows.length;i++){ const v=val(rows[i],cNF).replace(/\D/g,''); if(v){nf=v;break;} }
       return {dist,nf,itens,viaCabecalho:true};
     }
   }
