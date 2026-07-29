@@ -403,8 +403,23 @@ const $=(s,r)=>(r||document).querySelector(s);
 const $$=(s,r)=>Array.from((r||document).querySelectorAll(s));
 function uid(){return 'id'+Math.random().toString(36).slice(2,9)+(seq++);}
 let seq=0;
-function loadLS(k,f){try{const v=JSON.parse(localStorage.getItem(k));return v==null?f:v;}catch(e){return f;}}
-function saveLS(k,o){try{localStorage.setItem(k,JSON.stringify(o));}catch(e){}}
+/* Chaves que não puderam ser lidas (JSON corrompido). Enquanto houver alguma
+   aqui, o app NÃO sobrescreve nada — antes perder a sessão que apagar o dado. */
+const LS_RUIM={};
+let LS_CHEIO=false;
+function loadLS(k,f){
+  let bruto=null;
+  try{ bruto=localStorage.getItem(k); }catch(e){ return f; }
+  if(bruto==null||bruto==='')return f;
+  try{ const v=JSON.parse(bruto); return v==null?f:v; }
+  catch(e){ LS_RUIM[k]=bruto; console.error('Conteúdo ilegível em '+k+' — preservado, não será sobrescrito.'); return f; }
+}
+function saveLS(k,o){
+  if(LS_RUIM[k])return false;              // não sobrescreve dado que não conseguimos ler
+  try{ localStorage.setItem(k,JSON.stringify(o)); return true; }
+  catch(e){ LS_CHEIO=true; console.error('Falha ao salvar '+k,e); return false; }
+}
+function temDadoIlegivel(){ return Object.keys(LS_RUIM).length>0; }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function norm(s){return String(s==null?'':s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.setAttribute('role','status');el.setAttribute('aria-live','polite');el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3200);}
@@ -445,11 +460,59 @@ function ensureMinimos(){
   TURNOS.forEach(t=>{ if(!MINIMOS[t.id])MINIMOS[t.id]={}; CATS.forEach(c=>{ if(MINIMOS[t.id][c.id]==null)MINIMOS[t.id][c.id]=1; }); });
 }
 ensureMinimos();
+/* Fotografia do estado para poder voltar atrás. Guarda as 3 últimas versões
+   com conteúdo, e sempre a última em que havia dados ("cheia"). */
+const BAK_KEYS=['fg_bak1','fg_bak2','fg_bak3'];
+function estadoAtual(){
+  return {v:4,quando:new Date().toISOString(),funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,
+    turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG,
+    mensal:MENSAL,validade:VALIDADE,valcfg:VALCFG};
+}
+function contarRegistros(e){
+  if(!e)return 0;
+  return (e.funcs||[]).length+(e.trocas||[]).length+(e.banco||[]).length+(e.receb||[]).length
+    +(e.diverg||[]).length+(e.validade||[]).length+(e.mensal||[]).length+(e.recdoc||[]).length+(e.ferias||[]).length;
+}
+function gravarBackup(){
+  const atual=estadoAtual();
+  if(contarRegistros(atual)===0)return;                       // nunca guarda backup vazio
+  try{
+    const b1=localStorage.getItem('fg_bak1');
+    if(b1){ const b2=localStorage.getItem('fg_bak2'); if(b2)localStorage.setItem('fg_bak3',b2); localStorage.setItem('fg_bak2',b1); }
+    localStorage.setItem('fg_bak1',JSON.stringify(atual));
+    localStorage.setItem('fg_bak_cheio',JSON.stringify(atual));  // última versão COM dados
+  }catch(e){ LS_CHEIO=true; }
+}
+let _ultimoTotal=null;
+// quantos registros existiam no armazenamento quando o app abriu
+function totalGuardado(){
+  const d=lerBackup('fg_bak_cheio');
+  return d?contarRegistros(d):0;
+}
 function saveAll(){
+  const total=contarRegistros(estadoAtual());
+  /* Risco real: o app abriu vazio (falha de leitura) e o primeiro save gravaria
+     por cima do que estava salvo. Exclusão feita pelo usuário durante a sessão
+     não cai aqui, porque aí já houve pelo menos um save antes. */
+  if(total===0 && _ultimoTotal===null && totalGuardado()>0){
+    console.error('Bloqueado: primeiro save da sessão está vazio, mas há '+totalGuardado()+' registro(s) guardado(s).');
+    toast('Salvamento bloqueado: seus dados guardados não foram carregados. Vá em Configurações → Recuperação','err');
+    return;
+  }
+  if(temDadoIlegivel()){
+    console.error('Há dado ilegível no armazenamento; salvamento suspenso.');
+    return;
+  }
+  _ultimoTotal=total;
+  saveAllInterno();
+  gravarBackup();
+}
+function saveAllInterno(){
   saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
   saveLS('fg_feriados',FERIAS);saveLS('fg_turnos',TURNOS);saveLS('fg_cats',CATS);saveLS('fg_minimos',MINIMOS);
   saveLS('fg_receb',RECEB);saveLS('fg_recdoc',RECDOC);saveLS('fg_diverg',DIVERG);saveLS('fg_mensal',MENSAL);
   saveLS('fg_validade',VALIDADE);saveLS('fg_valcfg',VALCFG);
+  if(LS_CHEIO)toast('O navegador recusou salvar (armazenamento cheio) — exporte um backup','err');
 }
 const catName=id=>{const c=CATS.find(c=>c.id===id);return c?c.nome:'Sem categoria';};
 const turnoOf=id=>TURNOS.find(t=>t.id===id)||null;
@@ -628,7 +691,7 @@ $('#themeBtn').onclick=()=>{
   saveLS('fg_tema',TEMA); applyTheme(TEMA);
 };
 let trocaCruzada=false;   // modo do formulário de troca
-const APP_VER='2026.07.24-7';
+const APP_VER='2026.07.24-8';
 function render(){ try{ renderInterno(); }catch(e){ falhaNaTela(e); } }
 function falhaNaTela(e){
   const el=$('#tab-'+activeTab); if(!el)return;
@@ -2600,6 +2663,55 @@ function renderDiverg(){
   });
 }
 
+/* ---------- diagnóstico e recuperação do armazenamento ---------- */
+function lerBackup(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } }
+function tamanhoLS(){
+  let n=0; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); n+=(k+(localStorage.getItem(k)||'')).length; } }catch(e){}
+  return n;
+}
+function cardRecuperacao(){
+  const chaves=[];
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(/^fg_/.test(k))chaves.push({k,len:(localStorage.getItem(k)||'').length}); } }catch(e){}
+  chaves.sort((a,b)=>a.k.localeCompare(b.k));
+  const atual=contarRegistros(estadoAtual());
+  const bks=[{k:'fg_bak_cheio',rot:'Última versão com dados'},{k:'fg_bak1',rot:'Backup 1 (mais recente)'},
+             {k:'fg_bak2',rot:'Backup 2'},{k:'fg_bak3',rot:'Backup 3'}]
+    .map(b=>{ const d=lerBackup(b.k); return d?{...b,n:contarRegistros(d),quando:d.quando||''}:null; }).filter(Boolean);
+
+  let h='<div class="card"><h2><i class="ti ti-lifebuoy" aria-hidden="true"></i> Diagnóstico e recuperação</h2>'
+    +'<p class="hint">Seus dados moram só neste navegador. Se algo desapareceu, confira aqui antes de recadastrar.</p>';
+  if(temDadoIlegivel())
+    h+='<div class="alert danger"><i class="ti ti-alert-triangle" aria-hidden="true"></i><div><b>Há conteúdo ilegível no armazenamento</b> ('+esc(Object.keys(LS_RUIM).join(', '))+'). O app parou de salvar para não apagar nada. Exporte um backup e me avise.</div></div>';
+  if(LS_CHEIO)
+    h+='<div class="alert danger"><i class="ti ti-database-exclamation" aria-hidden="true"></i><div><b>O navegador recusou salvar</b> — armazenamento cheio. Exporte um backup e apague o que não usa.</div></div>';
+
+  h+='<div class="stats"><div class="stat'+(atual?' good':' bad')+'"><div class="v">'+atual+'</div><div class="k"><i class="ti ti-database" aria-hidden="true"></i> Registros carregados</div></div>'
+    +'<div class="stat"><div class="v">'+Math.round(tamanhoLS()/1024)+'</div><div class="k"><i class="ti ti-weight" aria-hidden="true"></i> KB usados</div></div>'
+    +'<div class="stat"><div class="v">'+bks.length+'</div><div class="k"><i class="ti ti-history" aria-hidden="true"></i> Cópias internas</div></div></div>';
+
+  if(bks.length){
+    h+='<div class="tbl-wrap" style="margin-top:14px"><table class="mini-tbl"><thead><tr><th>Cópia</th><th>Registros</th><th>Quando</th><th></th></tr></thead><tbody>';
+    bks.forEach(b=>{
+      h+='<tr><td>'+esc(b.rot)+'</td><td class="num"><b>'+b.n+'</b></td>'
+        +'<td class="num" style="font-size:11.5px">'+esc(b.quando?b.quando.replace('T',' ').slice(0,16):'—')+'</td>'
+        +'<td style="text-align:right"><button class="btn btn-primary btn-sm recRest" type="button" data-k="'+b.k+'"'+(b.n?'':' disabled')+'><i class="ti ti-restore" aria-hidden="true"></i> Restaurar</button></td></tr>';
+    });
+    h+='</tbody></table></div><p class="hint" style="margin:10px 0 0">Restaurar substitui o que está na tela pela cópia escolhida. O que existe agora é salvo como backup antes.</p>';
+  }else{
+    h+='<div class="alert info" style="margin-top:14px"><i class="ti ti-info-circle" aria-hidden="true"></i><div>Nenhuma cópia interna ainda. Elas passam a ser criadas a cada alteração — e o arquivo de <b>Backup</b> abaixo continua sendo a garantia que sobrevive a troca de navegador.</div></div>';
+  }
+
+  h+='<div class="row-actions"><button class="btn btn-ghost btn-sm" id="recVer" type="button"><i class="ti ti-list-details" aria-hidden="true"></i> Ver o que está guardado</button></div>';
+  if(chaves.length){
+    h+='<details style="margin-top:12px"><summary class="muted" style="cursor:pointer;font-size:13px">Chaves no armazenamento ('+chaves.length+')</summary>'
+      +'<div class="tbl-wrap" style="margin-top:8px"><table class="mini-tbl"><tbody>'
+      +chaves.map(c=>'<tr><td class="num" style="font-size:12px">'+esc(c.k)+'</td><td class="num">'+c.len+' car.</td></tr>').join('')
+      +'</tbody></table></div></details>';
+  }
+  return h+'</div>';
+}
+
 /* ============================================================
    ABA: VALIDADE — produtos de olho no vencimento
    Você cadastra o medicamento e a data de validade; o app avisa
@@ -2896,6 +3008,7 @@ function renderConfig(){
     +(temD?('<p class="hint" style="margin:14px 0 0">No app agora: <b>'+dc.funcs+'</b> funcionário(s), <b>'+dc.trocas+'</b> troca(s), <b>'+dc.banco+'</b> lançamento(s), <b>'+dc.ferias+'</b> feriado(s), <b>'+dc.receb+'</b> item(ns) de recebimento e <b>'+dc.diverg+'</b> divergência(s) de teste.</p>'):'')
     +'</div>';
 
+  html+=cardRecuperacao();
   html+='<div class="card"><h2><i class="ti ti-database"></i> Backup dos dados</h2><p class="hint">Exporte tudo para um arquivo (guarde como cópia de segurança) ou restaure de um arquivo salvo.</p>'
     +'<div class="row-actions" style="margin-top:0"><button class="btn btn-ghost btn-sm" id="bkExport"><i class="ti ti-download"></i> Exportar dados</button>'
     +'<button class="btn btn-ghost btn-sm" id="bkImport"><i class="ti ti-upload"></i> Importar dados</button>'
@@ -2933,6 +3046,34 @@ function renderConfig(){
     removeDemo(); saveAll(); renderConfig(); toast('Dados de teste removidos');
   };
 
+  $$('.recRest').forEach(b=>b.onclick=()=>{
+    const d=lerBackup(b.dataset.k); if(!d){ toast('Cópia vazia','err'); return; }
+    const n=contarRegistros(d);
+    if(!confirm('Restaurar '+n+' registro(s) desta cópia?\n\nO que está na tela agora será guardado como backup antes da troca.'))return;
+    gravarBackup();
+    if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias;
+    if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos;
+    if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg;
+    if(d.mensal)MENSAL=d.mensal; if(d.validade)VALIDADE=d.validade; if(d.valcfg)VALCFG=d.valcfg;
+    ensureMinimos(); _ultimoTotal=null; saveAllInterno(); render(); selosDasAbas();
+    toast(n+' registro(s) restaurado(s)','ok');
+  });
+  const rv=$('#recVer');
+  if(rv)rv.onclick=()=>{
+    const e=estadoAtual();
+    openModal('O que está guardado agora','ti-list-details',
+      '<div class="tbl-wrap"><table class="mini-tbl"><tbody>'
+      +[['Funcionários',(e.funcs||[]).length],['Trocas',(e.trocas||[]).length],['Lançamentos de horas',(e.banco||[]).length],
+        ['Escalas mensais',(e.mensal||[]).length],['Itens de recebimento',(e.receb||[]).length],
+        ['Documentos lidos',(e.recdoc||[]).length],['Divergências',(e.diverg||[]).length],
+        ['Produtos em validade',(e.validade||[]).length],['Feriados',(e.ferias||[]).length],
+        ['Turnos',(e.turnos||[]).length],['Categorias',(e.cats||[]).length]]
+        .map(r=>'<tr><td>'+r[0]+'</td><td class="num"><b>'+r[1]+'</b></td></tr>').join('')
+      +'</tbody></table></div>'
+      +'<p class="hint" style="margin:12px 0 0">Se algum número está zerado sem motivo, tente <b>Restaurar</b> uma cópia acima.</p>',
+      '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Fechar</button>');
+  };
+
   $('#bkExport').onclick=()=>{
     const data={v:4,funcs:FUNCS,trocas:TROCAS,banco:BANCO,ferias:FERIAS,turnos:TURNOS,cats:CATS,minimos:MINIMOS,receb:RECEB,recdoc:RECDOC,diverg:DIVERG,mensal:MENSAL,validade:VALIDADE,valcfg:VALCFG};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -2942,7 +3083,7 @@ function renderConfig(){
   $('#bkFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result);
     if(d.funcs)FUNCS=d.funcs; if(d.trocas)TROCAS=d.trocas; if(d.banco)BANCO=d.banco; if(d.ferias)FERIAS=d.ferias; if(d.turnos)TURNOS=d.turnos; if(d.cats)CATS=d.cats; if(d.minimos)MINIMOS=d.minimos; if(d.receb)RECEB=d.receb; if(d.recdoc)RECDOC=d.recdoc; if(d.diverg)DIVERG=d.diverg; if(d.mensal)MENSAL=d.mensal; if(d.validade)VALIDADE=d.validade; if(d.valcfg)VALCFG=d.valcfg;
     ensureMinimos(); saveAll(); render(); toast('Dados importados','ok'); }catch(err){ toast('Arquivo inválido','err'); } }; r.readAsText(f); e.target.value=''; };
-  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[];MENSAL=[];VALIDADE=[]; saveAll(); render(); selosDasAbas(); toast('Dados apagados'); } };
+  $('#bkClear').onclick=()=>{ if(confirm('Apagar TODOS os dados do app? Esta ação não pode ser desfeita.')){ gravarBackup(); FUNCS=[];TROCAS=[];BANCO=[];FERIAS=[];RECEB=[];RECDOC=[];DIVERG=[];MENSAL=[];VALIDADE=[]; _ultimoTotal=0; saveAllInterno(); render(); selosDasAbas(); toast('Dados apagados — ainda recuperáveis em Configurações → Recuperação'); } };
 }
 
 /* ================= start ================= */
