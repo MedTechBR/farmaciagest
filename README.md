@@ -42,7 +42,13 @@ Todo registro criado assim nasce marcado com `demo:true`, aparece com o selo **t
 
 ## Dados
 
-Tudo fica salvo **apenas no navegador** (`localStorage`). Nada é enviado para servidor algum. Trocar de navegador ou limpar os dados do site apaga tudo — use **Configurações → Backup** para exportar.
+Tudo fica salvo **apenas no navegador** (`localStorage`). Nada é enviado para servidor algum. Trocar de navegador, usar aba privada ou limpar os dados do site apaga tudo — o **arquivo de backup** (Configurações → Backup → Exportar) é a única cópia que sobrevive a isso.
+
+### Proteções contra perda
+
+O app guarda **cópias internas automáticas** (3 versões + a última que tinha dados) a cada alteração, e **Configurações → Diagnóstico e recuperação** mostra quantos registros foram carregados, o espaço usado, as chaves presentes e permite restaurar qualquer cópia com um clique. "Apagar tudo" tira backup antes.
+
+Duas falhas de origem foram fechadas: conteúdo ilegível no armazenamento (JSON truncado por save interrompido ou cota cheia) fazia o app abrir vazio e **sobrescrever** o dado no primeiro salvamento — agora ele é preservado e o salvamento é suspenso com aviso; e falha por armazenamento cheio era engolida em silêncio — agora aparece na tela.
 
 ## Rodar localmente
 
