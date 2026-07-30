@@ -244,6 +244,13 @@ tr:last-child td{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
 
+/* O módulo MedTech cobre a tela com o login assim que carrega. Aqui o app
+   precisa funcionar sem conta (a farmácia usa no balcão), então o overlay
+   fica escondido até alguém tocar em "Entrar". */
+#mt-auth{display:none!important}
+body.quer-login #mt-auth{display:flex!important}
+.nuvem-chip{cursor:pointer;font-family:inherit}
+
 /* estado dos dados (local / nuvem) */
 .nuvem-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;
   border:1px solid var(--line-strong);border-radius:99px;background:var(--surface-2);color:var(--muted);
@@ -381,7 +388,7 @@ table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;whit
     <span>FarmáciaGest<small>Gestão de escala, trocas e banco de horas</small></span>
   </h1>
   <div class="top-actions">
-    <span class="nuvem-chip" id="nuvemChip" role="status"><i class="ti ti-device-floppy" aria-hidden="true"></i><span>Só neste aparelho</span></span>
+    <button class="nuvem-chip" id="nuvemChip" type="button"><i class="ti ti-device-floppy" aria-hidden="true"></i><span>Só neste aparelho</span></button>
     <button class="icon-btn" id="themeBtn" type="button" aria-label="Alternar tema claro/escuro" title="Alternar tema"><i class="ti ti-moon" id="themeIcon" aria-hidden="true"></i></button>
   </div>
 </header>
@@ -3097,14 +3104,48 @@ function enviarParaNuvem(){
     }
   },900);
 }
+function abrirLogin(){
+  if(!window.MT||MT.mode!=='cloud'){ toast('Login indisponível agora','err'); return; }
+  document.body.classList.add('quer-login');
+  const el=document.getElementById('mt-auth');
+  if(el){ el.scrollIntoView({block:'center'}); const i=el.querySelector('input'); if(i)i.focus(); }
+  else toast('Carregando o login… tente de novo em 2 segundos');
+}
+function fecharLogin(){ document.body.classList.remove('quer-login'); }
+function painelNuvem(){
+  if(nuvemLigada()){
+    const quem=(MT.user&&(MT.user.displayName||MT.user.email))||'sua conta';
+    openModal('Dados na sua conta','ti-cloud-check',
+      '<div class="alert ok"><i class="ti ti-cloud-check" aria-hidden="true"></i><div>Sincronizado com <b>'+esc(quem)+'</b>.<br>'
+      +'<span class="muted" style="font-size:12px">'+esc(nuvemDetalhe||'')+'</span></div></div>'
+      +'<p class="hint" style="margin:12px 0 0">Entre com a mesma conta em outro aparelho para ver os mesmos dados. As alterações são juntadas item a item — trabalhar nos dois ao mesmo tempo não apaga o do outro.</p>',
+      '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Fechar</button>'
+      +'<button class="btn btn-danger btn-sm" id="nvSair" type="button"><i class="ti ti-logout" aria-hidden="true"></i> Sair da conta</button>');
+    $('#nvSair').onclick=()=>{
+      if(!confirm('Sair da conta? Os dados continuam neste aparelho e voltam a sincronizar quando você entrar de novo.'))return;
+      closeModal(); try{ MT.signOut(); }catch(e){}
+      nuvemEstado='local'; nuvemDetalhe=''; pintarNuvem();
+    };
+    return;
+  }
+  openModal('Guardar na conta MedTech','ti-cloud-upload',
+    '<p class="hint" style="margin-top:0">Hoje os dados ficam <b>só neste navegador</b>. Se o aparelho limpar o armazenamento, eles somem — foi o que aconteceu antes.</p>'
+    +'<p class="hint" style="margin:0 0 12px">Entrando na sua conta MedTech (a mesma dos outros apps), tudo passa a ser guardado na nuvem e volta em qualquer aparelho. O app continua funcionando offline.</p>'
+    +'<div class="alert info"><i class="ti ti-info-circle" aria-hidden="true"></i><div>Os dados que já estão aqui <b>sobem para a conta</b> no primeiro login — nada é apagado.</div></div>',
+    '<button class="btn btn-ghost btn-sm" type="button" onclick="closeModal()">Agora não</button>'
+    +'<button class="btn btn-primary btn-sm" id="nvEntrar" type="button"><i class="ti ti-login" aria-hidden="true"></i> Entrar na conta</button>');
+  $('#nvEntrar').onclick=()=>{ closeModal(); abrirLogin(); };
+}
 function iniciarNuvem(){
   fotografarNuv();
+  const chip=$('#nuvemChip'); if(chip)chip.onclick=painelNuvem;
   if(!window.MT){ pintarNuvem(); return; }
   MT.onData(remoto=>{
     if(remoto&&typeof remoto==='object'&&(remoto.v||remoto.funcs)){
       if(aplicarRemoto(remoto)){ render(); selosDasAbas(); }
     }
     if(nuvemLigada()){
+      fecharLogin();
       nuvemEstado='sincronizado';
       nuvemDetalhe='Guardado na conta'+(MT.user&&MT.user.email?' '+MT.user.email:'');
       // primeira entrada: o que já existe no aparelho sobe para a conta
