@@ -13,6 +13,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="/_mtfb.js?v=1"></script>
+<script>window.MT_APP={id:"farmaciagest",name:"FarmáciaGest"};</script>
+<script type="module" src="/_mtauth.js?v=9"></script>
 <style>
 /* ============================================================
    TOKENS — uma fonte da verdade para cor, espaço, tipo e sombra.
@@ -241,6 +244,15 @@ tr:last-child td{border-bottom:none}
 .kv .k{color:var(--muted);font-weight:600}
 .kv .v{font-weight:700;text-align:right}
 
+/* estado dos dados (local / nuvem) */
+.nuvem-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;
+  border:1px solid var(--line-strong);border-radius:99px;background:var(--surface-2);color:var(--muted);
+  font-size:12px;font-weight:700;white-space:nowrap}
+.nuvem-chip .ti{font-size:15px}
+.nuvem-chip.ok{background:var(--brand-soft);color:var(--brand-dark);border-color:var(--brand-line)}
+.nuvem-chip.bad{background:var(--danger-soft);color:var(--danger);border-color:#f3c9c9}
+@media(max-width:560px){.nuvem-chip span{display:none}.nuvem-chip{padding:6px 8px}}
+
 /* selo de pendência na aba */
 .tab-badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;
   border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-weight:800;line-height:1}
@@ -369,6 +381,7 @@ table.grid-escala td.cel{text-align:center;font-weight:700;font-size:11.5px;whit
     <span>FarmáciaGest<small>Gestão de escala, trocas e banco de horas</small></span>
   </h1>
   <div class="top-actions">
+    <span class="nuvem-chip" id="nuvemChip" role="status"><i class="ti ti-device-floppy" aria-hidden="true"></i><span>Só neste aparelho</span></span>
     <button class="icon-btn" id="themeBtn" type="button" aria-label="Alternar tema claro/escuro" title="Alternar tema"><i class="ti ti-moon" id="themeIcon" aria-hidden="true"></i></button>
   </div>
 </header>
@@ -506,6 +519,7 @@ function saveAll(){
   _ultimoTotal=total;
   saveAllInterno();
   gravarBackup();
+  if(typeof carimbarMudancas==='function'&&!_aplicandoRemoto){ carimbarMudancas(); enviarParaNuvem(); }
 }
 function saveAllInterno(){
   saveLS('fg_funcs',FUNCS);saveLS('fg_trocas',TROCAS);saveLS('fg_banco',BANCO);
@@ -2954,6 +2968,155 @@ function ligarValidade(){
 }
 
 /* ============================================================
+   NUVEM — conta MedTech (projeto central medtech-c658c)
+   O app continua funcionando offline no aparelho; ao entrar na
+   conta, os dados passam a viver também no Firestore e voltam em
+   qualquer aparelho.
+
+   REGRA DE OURO: nunca sobrescrever o remoto com o local. O
+   estado inteiro num doc com last-write-wins já apagou dados em
+   outro app da casa — aqui a junção é ITEM A ITEM, por carimbo de
+   alteração, com lápides para as exclusões.
+   ============================================================ */
+const NUV_COLS=['funcs','trocas','banco','receb','recdoc','diverg','validade','mensal'];
+const NUV_REF={ funcs:()=>FUNCS, trocas:()=>TROCAS, banco:()=>BANCO, receb:()=>RECEB,
+  recdoc:()=>RECDOC, diverg:()=>DIVERG, validade:()=>VALIDADE, mensal:()=>MENSAL };
+const NUV_SET={ funcs:v=>FUNCS=v, trocas:v=>TROCAS=v, banco:v=>BANCO=v, receb:v=>RECEB=v,
+  recdoc:v=>RECDOC=v, diverg:v=>DIVERG=v, validade:v=>VALIDADE=v, mensal:v=>MENSAL=v };
+// blocos sem id próprio: valem pelo carimbo do bloco inteiro
+const NUV_BLOCOS=['turnos','cats','minimos','ferias','valcfg'];
+const NUV_BREF={ turnos:()=>TURNOS, cats:()=>CATS, minimos:()=>MINIMOS, ferias:()=>FERIAS, valcfg:()=>VALCFG };
+const NUV_BSET={ turnos:v=>TURNOS=v, cats:v=>CATS=v, minimos:v=>MINIMOS=v, ferias:v=>FERIAS=v, valcfg:v=>VALCFG=v };
+
+let LAPIDES=loadLS('fg_lapides',{});    // {colecao:{id:carimbo}} — o que foi excluído
+let CARIMBOS=loadLS('fg_carimbos',{});  // {bloco:carimbo}
+let _snapNuv={};                        // último estado conhecido, para saber o que mudou
+let nuvemEstado='local', nuvemDetalhe='', _aplicandoRemoto=false, _saveTimer=null;
+
+function fotografarNuv(){
+  _snapNuv={};
+  NUV_COLS.forEach(c=>{
+    const m={};
+    (NUV_REF[c]()||[]).forEach(it=>{ if(it&&it.id){ const cp=Object.assign({},it); delete cp._upd; m[it.id]=JSON.stringify(cp); } });
+    _snapNuv[c]=m;
+  });
+  NUV_BLOCOS.forEach(b=>{ _snapNuv['_b_'+b]=JSON.stringify(NUV_BREF[b]()); });
+}
+/* carimba o que mudou desde o último save e registra as exclusões */
+function carimbarMudancas(){
+  const t=Date.now();
+  NUV_COLS.forEach(c=>{
+    const atual=NUV_REF[c]()||[], antes=_snapNuv[c]||{}, vistos={};
+    atual.forEach(it=>{
+      if(!it||!it.id)return;
+      vistos[it.id]=true;
+      const cp=Object.assign({},it); delete cp._upd;
+      const json=JSON.stringify(cp);
+      if(antes[it.id]!==json||!it._upd) it._upd=t;
+    });
+    Object.keys(antes).forEach(id=>{ if(!vistos[id]){ LAPIDES[c]=LAPIDES[c]||{}; LAPIDES[c][id]=t; } });
+  });
+  NUV_BLOCOS.forEach(b=>{ if(_snapNuv['_b_'+b]!==JSON.stringify(NUV_BREF[b]()))CARIMBOS[b]=t; });
+  saveLS('fg_lapides',LAPIDES); saveLS('fg_carimbos',CARIMBOS);
+  fotografarNuv();
+}
+function juntarColecao(local,remoto,lapides){
+  const por={};
+  (remoto||[]).forEach(it=>{ if(it&&it.id)por[it.id]=it; });
+  (local||[]).forEach(it=>{
+    if(!it||!it.id)return;
+    const r=por[it.id];
+    if(!r||(it._upd||0)>=(r._upd||0))por[it.id]=it;
+  });
+  Object.keys(lapides||{}).forEach(id=>{
+    const it=por[id];
+    if(it&&(it._upd||0)<=lapides[id])delete por[id];
+  });
+  return Object.keys(por).map(k=>por[k]);
+}
+function juntarLapides(a,b){
+  const out={};
+  [a||{},b||{}].forEach(src=>Object.keys(src).forEach(col=>{
+    out[col]=out[col]||{};
+    Object.keys(src[col]||{}).forEach(id=>{ out[col][id]=Math.max(out[col][id]||0,src[col][id]||0); });
+  }));
+  return out;
+}
+function empacotarNuvem(){
+  const p={v:1,quando:new Date().toISOString(),carimbos:CARIMBOS,lapides:LAPIDES};
+  NUV_COLS.forEach(c=>p[c]=NUV_REF[c]());
+  NUV_BLOCOS.forEach(b=>p[b]=NUV_BREF[b]());
+  return p;
+}
+/* junta o que veio da nuvem com o que já existe aqui */
+function aplicarRemoto(rem){
+  if(!rem||typeof rem!=='object')return false;
+  _aplicandoRemoto=true;
+  try{
+    LAPIDES=juntarLapides(LAPIDES,rem.lapides);
+    NUV_COLS.forEach(c=>{ NUV_SET[c](juntarColecao(NUV_REF[c]()||[],rem[c]||[],LAPIDES[c]||{})); });
+    NUV_BLOCOS.forEach(b=>{
+      const meu=CARIMBOS[b]||0, dele=(rem.carimbos&&rem.carimbos[b])||0;
+      if(rem[b]!==undefined&&dele>meu){ NUV_BSET[b](rem[b]); CARIMBOS[b]=dele; }
+    });
+    ensureMinimos();
+    saveLS('fg_lapides',LAPIDES); saveLS('fg_carimbos',CARIMBOS);
+    saveAllInterno(); gravarBackup();
+    fotografarNuv();
+  } finally { _aplicandoRemoto=false; }
+  return true;
+}
+function nuvemLigada(){ return !!(window.MT&&MT.user&&!MT.user.demo); }
+function pintarNuvem(){
+  const el=$('#nuvemChip'); if(!el)return;
+  const map={local:{i:'ti-device-floppy',t:'Só neste aparelho'},
+    ligando:{i:'ti-cloud-upload',t:'Sincronizando…'},
+    sincronizado:{i:'ti-cloud-check',t:'Na sua conta',c:'ok'},
+    erro:{i:'ti-cloud-off',t:'Sem sincronizar',c:'bad'}};
+  const m=map[nuvemEstado]||map.local;
+  el.className='nuvem-chip '+(m.c||'');
+  el.innerHTML='<i class="ti '+m.i+'" aria-hidden="true"></i><span>'+esc(m.t)+'</span>';
+  el.setAttribute('title',nuvemDetalhe||m.t);
+  el.setAttribute('aria-label','Estado dos dados: '+(nuvemDetalhe||m.t));
+}
+function enviarParaNuvem(){
+  if(!nuvemLigada()||_aplicandoRemoto)return;
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(async()=>{
+    try{
+      nuvemEstado='ligando'; pintarNuvem();
+      const pac=empacotarNuvem(), tam=JSON.stringify(pac).length;
+      await MT.save(pac);
+      nuvemEstado='sincronizado';
+      nuvemDetalhe='Guardado na conta'+(MT.user&&MT.user.email?' '+MT.user.email:'')+' · '+Math.round(tam/1024)+' KB';
+      if(tam>800000)nuvemDetalhe+=' — perto do limite de 1 MB por registro';
+      pintarNuvem();
+    }catch(e){
+      nuvemEstado='erro'; nuvemDetalhe=String((e&&e.message)||e); pintarNuvem();
+      console.error('Falha ao enviar para a nuvem',e);
+    }
+  },900);
+}
+function iniciarNuvem(){
+  fotografarNuv();
+  if(!window.MT){ pintarNuvem(); return; }
+  MT.onData(remoto=>{
+    if(remoto&&typeof remoto==='object'&&(remoto.v||remoto.funcs)){
+      if(aplicarRemoto(remoto)){ render(); selosDasAbas(); }
+    }
+    if(nuvemLigada()){
+      nuvemEstado='sincronizado';
+      nuvemDetalhe='Guardado na conta'+(MT.user&&MT.user.email?' '+MT.user.email:'');
+      // primeira entrada: o que já existe no aparelho sobe para a conta
+      const vazioLaFora=!remoto||!((remoto.funcs||[]).length||(remoto.mensal||[]).length);
+      if(vazioLaFora&&((FUNCS||[]).length||(MENSAL||[]).length))enviarParaNuvem();
+    }else nuvemEstado='local';
+    pintarNuvem();
+  });
+  if(MT.ready&&MT.ready.then)MT.ready.then(pintarNuvem).catch(()=>{});
+}
+
+/* ============================================================
    ABA: CONFIGURAÇÕES
    ============================================================ */
 function renderConfig(){
@@ -3090,6 +3253,7 @@ function renderConfig(){
 { const v=$('#verTag'); if(v)v.textContent='v'+APP_VER; }
 ensureTurnosDasEscalas();
 selosDasAbas();
+iniciarNuvem();
 setTimeout(()=>avisarVencimentos(false),1200);
 render();
 </script>
