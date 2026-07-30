@@ -42,7 +42,11 @@ Todo registro criado assim nasce marcado com `demo:true`, aparece com o selo **t
 
 ## Dados
 
-Tudo fica salvo **apenas no navegador** (`localStorage`). Nada é enviado para servidor algum. Trocar de navegador, usar aba privada ou limpar os dados do site apaga tudo — o **arquivo de backup** (Configurações → Backup → Exportar) é a única cópia que sobrevive a isso.
+O app funciona **offline no aparelho** (`localStorage`) e, opcionalmente, sincroniza com a **conta MedTech** (projeto central `medtech-c658c`, o mesmo login dos outros apps). O chip no cabeçalho mostra o estado: *Só neste aparelho*, *Sincronizando*, *Na sua conta* ou *Sem sincronizar*.
+
+Sem login o app continua inteiro — o balcão não é bloqueado por tela de conta. Ao entrar, os dados que já estavam no aparelho **sobem** para a conta (nada é apagado) e voltam em qualquer aparelho. Sem sincronizar, trocar de navegador, usar aba privada ou o sistema limpar o site apaga tudo, e só o **arquivo de backup** (Configurações → Backup → Exportar) sobrevive.
+
+**Como a sincronização evita perda:** o padrão do módulo central grava o estado inteiro num documento (`last-write-wins`), o que já apagou dados em outro app da casa quando dois aparelhos editavam. Aqui o pacote é montado com **junção item a item**: cada registro carrega carimbo de alteração, exclusões viram lápides, e o que chega da nuvem é *mesclado* com o local em vez de substituí-lo. Testado: editar aqui + cadastrar no outro aparelho preserva os dois; exclusão se propaga sem ressuscitar; entrar na conta com o app cheio e a conta vazia não apaga nada. Doze meses de escala ocupam ~200 KB — o app avisa acima de 800 KB (limite de 1 MB por documento).
 
 ### Proteções contra perda
 
